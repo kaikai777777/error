@@ -1,223 +1,480 @@
 <script lang="ts">
-  import { store, CATEGORY_LABELS } from '$lib/data/store.svelte';
   import { goto } from '$app/navigation';
+  import { store, CATEGORY_LABELS } from '$lib/data/store.svelte';
   import type { Shipment } from '$lib/data/types';
 
-  // ── 기간 필터 상태 ────────────────────────────────────────────────
-  type QuickFilter = 'today' | 'week' | 'month' | 'custom';
-  let quickFilter = $state<QuickFilter>('month');
-
-  function isoSlice(ms: number): string {
-    return new Date(ms).toISOString().slice(0, 16);
-  }
-  function getTodayStart(): string {
-    const now = Date.now();
-    const d = new Date(now);
-    return isoSlice(now - (d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) * 1000 - d.getMilliseconds());
-  }
-  function getTodayEnd(): string {
-    const now = Date.now();
-    const d = new Date(now);
-    const startOfDay = now - (d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) * 1000 - d.getMilliseconds();
-    return isoSlice(startOfDay + 86400000 - 1);
-  }
-  function getWeekStart(): string {
-    const now = Date.now();
-    const d = new Date(now);
-    const dayMs = d.getDay() * 86400000;
-    const startOfDay = now - (d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) * 1000 - d.getMilliseconds();
-    return isoSlice(startOfDay - dayMs);
-  }
-  function getMonthStart(): string {
-    const now = Date.now();
-    const d = new Date(now);
-    const dayOfMonth = (d.getDate() - 1) * 86400000;
-    const startOfDay = now - (d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) * 1000 - d.getMilliseconds();
-    return isoSlice(startOfDay - dayOfMonth);
+  // ── 날짜 유틸 ──────────────────────────────────────────────────────
+  function toLocalDatetimeStr(date: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
-  let fromDate = $state(getMonthStart());
-  let toDate = $state(getTodayEnd());
-
-  // ── 빠른 필터 클릭 ────────────────────────────────────────────────
-  function applyQuick(filter: QuickFilter) {
-    quickFilter = filter;
-    if (filter === 'today') {
-      fromDate = getTodayStart();
-      toDate = getTodayEnd();
-    } else if (filter === 'week') {
-      fromDate = getWeekStart();
-      toDate = getTodayEnd();
-    } else if (filter === 'month') {
-      fromDate = getMonthStart();
-      toDate = getTodayEnd();
-    }
+  function startOfDay(date: Date): Date {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
   }
 
-  // ── 출고 기록 조회 ────────────────────────────────────────────────
-  let shipments = $derived<Shipment[]>(
-    store.selectedClientId
-      ? store.getShipmentsByDateRange(
-          store.selectedClientId,
-          new Date(fromDate).toISOString(),
-          new Date(toDate).toISOString()
-        )
-      : store.getShipmentsByDateRange(
-          null,
-          new Date(fromDate).toISOString(),
-          new Date(toDate).toISOString()
-        )
-  );
+  function endOfDay(date: Date): Date {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+  }
 
-  // ── 통계 요약 ─────────────────────────────────────────────────────
-  let totalShipmentCount = $derived(shipments.length);
-  let totalItemCount = $derived(
-    shipments.reduce((sum, s) => sum + s.items.reduce((a, i) => a + i.quantity, 0), 0)
-  );
+  function startOfWeek(date: Date): Date {
+    const d = new Date(date);
+    const day = d.getDay();
+    d.setDate(d.getDate() - day);
+    return startOfDay(d);
+  }
 
-  // ── 카테고리별 합계 ───────────────────────────────────────────────
-  let categorySummary = $derived<Record<string, number>>(
-    (() => {
-      const map: Record<string, number> = { towel: 0, sheet: 0, uniform: 0 };
-      for (const s of shipments) {
-        for (const item of s.items) {
-          map[item.category] = (map[item.category] ?? 0) + item.quantity;
-        }
-      }
-      return map;
-    })()
-  );
+  function startOfMonth(date: Date): Date {
+    return new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
+  }
 
-  // ── 수정 모달 상태 ────────────────────────────────────────────────
+  function formatDateTime(isoStr: string): string {
+    const d = new Date(isoStr);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  const now = new Date();
+
+  // ── 상태 ──────────────────────────────────────────────────────────
+  type FilterPreset = 'today' | 'week' | 'month' | 'all' | 'custom';
+  let filterPreset = $state<FilterPreset>('week');
+  let filterClientId = $state<string | null>(null);
+
+  let customFrom = $state(toLocalDatetimeStr(startOfDay(now)));
+  let customTo = $state(toLocalDatetimeStr(endOfDay(now)));
+
+  // 모달 상태
   let editingShipment = $state<Shipment | null>(null);
-  let editItems = $state<{ laundryItemId: string; itemName: string; category: string; quantity: number }[]>([]);
-  let editDriverId = $state('');
-  let editMemo = $state('');
   let editShippedAt = $state('');
+  let editItems = $state<Array<{ laundryItemId: string; itemName: string; category: string; quantity: number }>>([]);
+  let showDeleteConfirm = $state(false);
 
-  function openEditModal(shipment: Shipment) {
+  const clientIcons: Record<string, string> = {
+    hotel: '🏨', pension: '🏡', resort: '🌴', etc: '🏢'
+  };
+
+  // ── 파생: 날짜 범위 계산 ──────────────────────────────────────────
+  let dateRangeFrom = $derived((): string => {
+    const n = new Date();
+    if (filterPreset === 'today') return startOfDay(n).toISOString();
+    if (filterPreset === 'week') return startOfWeek(n).toISOString();
+    if (filterPreset === 'month') return startOfMonth(n).toISOString();
+    if (filterPreset === 'all') return new Date(0).toISOString();
+    return new Date(customFrom).toISOString();
+  });
+
+  let dateRangeTo = $derived((): string => {
+    const n = new Date();
+    if (filterPreset === 'today') return endOfDay(n).toISOString();
+    if (filterPreset === 'week') return endOfDay(n).toISOString();
+    if (filterPreset === 'month') return endOfDay(n).toISOString();
+    if (filterPreset === 'all') return endOfDay(n).toISOString();
+    return new Date(customTo).toISOString();
+  });
+
+  let filteredShipments = $derived(
+    store.getShipmentsByDateRange(filterClientId, dateRangeFrom(), dateRangeTo())
+      .slice()
+      .sort((a, b) => new Date(b.shippedAt).getTime() - new Date(a.shippedAt).getTime())
+  );
+
+  let totalCount = $derived(filteredShipments.length);
+  let totalQty = $derived(
+    filteredShipments.reduce((s, sh) => s + sh.items.reduce((q, it) => q + it.quantity, 0), 0)
+  );
+  let uniqueClients = $derived(
+    new Set(filteredShipments.map(s => s.clientId)).size
+  );
+
+  // ── 모달 열기/닫기 ────────────────────────────────────────────────
+  function openEdit(shipment: Shipment) {
     editingShipment = shipment;
-    editItems = shipment.items.map((i) => ({ ...i }));
-    editDriverId = shipment.driverId;
-    editMemo = shipment.memo ?? '';
-    editShippedAt = isoSlice(Date.parse(shipment.shippedAt));
+    editShippedAt = toLocalDatetimeStr(new Date(shipment.shippedAt));
+    editItems = shipment.items.map(it => ({ ...it }));
+    showDeleteConfirm = false;
   }
 
-  function closeEditModal() {
+  function closeEdit() {
     editingShipment = null;
-    editItems = [];
-    editDriverId = '';
-    editMemo = '';
-    editShippedAt = '';
+    showDeleteConfirm = false;
   }
 
   function saveEdit() {
     if (!editingShipment) return;
     store.updateShipment(editingShipment.id, {
-      items: editItems as Shipment['items'],
-      driverId: editDriverId,
-      memo: editMemo.trim() || undefined,
-      shippedAt: new Date(editShippedAt + ':00').toISOString(),
+      shippedAt: new Date(editShippedAt).toISOString(),
+      items: editItems.filter(it => it.quantity > 0).map(it => ({
+        laundryItemId: it.laundryItemId,
+        itemName: it.itemName as any,
+        category: it.category as any,
+        quantity: it.quantity
+      }))
     });
-    closeEditModal();
+    closeEdit();
+  }
+
+  function deleteShipment() {
+    if (!editingShipment) return;
+    store.removeShipment(editingShipment.id);
+    closeEdit();
   }
 
   function adjustEditQty(idx: number, delta: number) {
-    editItems = editItems.map((item, i) =>
-      i === idx ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
+    editItems = editItems.map((it, i) =>
+      i === idx ? { ...it, quantity: Math.max(0, it.quantity + delta) } : it
     );
   }
 
-  // ── 날짜 포맷 ─────────────────────────────────────────────────────
-  function formatDate(iso: string): string {
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
-  function formatDateShort(iso: string): string {
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(d.getMonth()+1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  function reprintSlip() {
+    alert('전표 재출력');
   }
 
-  // ── 카테고리 색상 ─────────────────────────────────────────────────
-  function catColor(cat: string): string {
-    if (cat === 'towel') return 'bg-sky-100 text-sky-700';
-    if (cat === 'sheet') return 'bg-violet-100 text-violet-700';
-    if (cat === 'uniform') return 'bg-orange-100 text-orange-700';
-    return 'bg-slate-100 text-slate-600';
-  }
+  const categoryChipColors: Record<string, string> = {
+    towel: 'bg-sky-100 text-sky-700',
+    sheet: 'bg-violet-100 text-violet-700',
+    uniform: 'bg-amber-100 text-amber-700'
+  };
 
-  // ── 빠른 필터 목록 ────────────────────────────────────────────────
-  const quickFilters: { key: QuickFilter; label: string }[] = [
+  const presetLabels: { key: FilterPreset; label: string }[] = [
     { key: 'today', label: '오늘' },
     { key: 'week', label: '이번주' },
     { key: 'month', label: '이번달' },
-    { key: 'custom', label: '직접입력' },
+    { key: 'all', label: '전체' },
   ];
 </script>
 
-<!-- 수정 모달 (오버레이) -->
-{#if editingShipment}
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-    role="presentation"
-  >
-    <!-- 백드롭 클릭 닫기용 버튼 -->
-    <button
-      type="button"
-      aria-label="모달 닫기"
-      class="absolute inset-0 w-full h-full cursor-default"
-      onclick={closeEditModal}
-    ></button>
-    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden relative z-10">
+<svelte:head>
+  <title>출고 현황 — Indigo Dashboard</title>
+</svelte:head>
 
-      <!-- 모달 헤더 -->
-      <div class="flex items-center justify-between px-6 py-5 border-b border-slate-100">
-        <div>
-          <h3 class="text-xl font-extrabold text-slate-800">출고 기록 수정</h3>
-          <p class="text-sm text-slate-400 mt-0.5">{formatDate(editingShipment.shippedAt)}</p>
-        </div>
+<div class="h-screen flex flex-col overflow-hidden bg-slate-50 select-none">
+
+  <!-- ── 상단 헤더 ── -->
+  <header class="h-16 bg-white border-b border-slate-200 shadow-sm flex items-center px-5 gap-3 shrink-0 z-10">
+    <div class="flex items-center gap-2.5 mr-3">
+      <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-sm shrink-0">
+        <span class="text-lg">🏭</span>
+      </div>
+      <span class="font-extrabold text-indigo-600 text-base tracking-tight whitespace-nowrap">세탁물 관리</span>
+    </div>
+
+    <nav class="flex items-center gap-3 flex-1">
+      <button
+        class="px-6 py-3 rounded-full text-base font-bold transition-all text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
+        onclick={() => goto('/theme-a')}
+      >세탁물관리</button>
+      <button
+        class="px-6 py-3 rounded-full text-base font-bold transition-all text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
+        onclick={() => goto('/theme-a/shipout')}
+      >출고신청</button>
+      <button
+        class="px-6 py-3 rounded-full text-base font-bold transition-all text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
+        onclick={() => goto('/theme-a/defect')}
+      >불량처리</button>
+      <button
+        class="px-6 py-3 rounded-full text-base font-bold transition-all bg-indigo-600 text-white shadow-md"
+        onclick={() => goto('/theme-a/history')}
+      >출고현황</button>
+    </nav>
+
+    <button
+      class="ml-auto px-4 py-2 rounded-full text-sm font-semibold text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all border border-slate-200"
+      onclick={() => goto('/')}
+    >홈으로 /</button>
+  </header>
+
+  <!-- ── 하단 영역 ── -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- ── 거래처 패널 ── -->
+    <aside class="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-hidden">
+      <div class="px-4 py-3 border-b border-slate-100">
+        <p class="text-xs font-bold text-indigo-600 tracking-wide uppercase">거래처 필터</p>
+      </div>
+      <div class="flex-1 overflow-y-auto">
+        <!-- 전체 -->
         <button
-          type="button"
-          aria-label="모달 닫기"
-          class="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 transition-all duration-150"
-          onclick={closeEditModal}
+          class="w-full min-h-[72px] flex items-center gap-3 px-4 text-left transition-all duration-150
+            {filterClientId === null
+              ? 'bg-indigo-50 border-l-4 border-l-indigo-600'
+              : 'border-l-4 border-l-transparent hover:bg-indigo-50/50'}"
+          onclick={() => filterClientId = null}
         >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
-          </svg>
+          <span class="text-2xl shrink-0">🏭</span>
+          <div class="flex-1 min-w-0">
+            <p class="font-bold text-base text-slate-800">전체 거래처</p>
+          </div>
+          <span class="text-sm font-bold text-indigo-500 shrink-0 bg-indigo-50 px-2 py-0.5 rounded-full">
+            {store.shipments.length}
+          </span>
         </button>
+
+        {#each store.clients as client (client.id)}
+          {@const isSelected = filterClientId === client.id}
+          {@const clientShipCount = store.shipments.filter(s => s.clientId === client.id).length}
+          <button
+            class="w-full min-h-[72px] flex items-center gap-3 px-4 text-left transition-all duration-150
+              {isSelected
+                ? 'bg-indigo-50 border-l-4 border-l-indigo-600'
+                : 'border-l-4 border-l-transparent hover:bg-indigo-50/50'}"
+            onclick={() => filterClientId = client.id}
+          >
+            <span class="text-2xl shrink-0">{clientIcons[client.type] ?? '🏢'}</span>
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-base text-slate-800 truncate">{client.name}</p>
+              <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full
+                {client.type === 'hotel' ? 'bg-blue-100 text-blue-600' :
+                 client.type === 'pension' ? 'bg-green-100 text-green-600' :
+                 client.type === 'resort' ? 'bg-purple-100 text-purple-600' :
+                 'bg-slate-100 text-slate-600'}">
+                {client.type}
+              </span>
+            </div>
+            <span class="text-sm font-bold text-indigo-500 shrink-0 bg-indigo-50 px-2 py-0.5 rounded-full">{clientShipCount}</span>
+          </button>
+        {/each}
+      </div>
+    </aside>
+
+    <!-- ── 메인 영역 ── -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+
+      <!-- 필터 바 -->
+      <div class="px-6 pt-4 pb-4 flex items-center gap-3 flex-wrap shrink-0 bg-indigo-50 border-b border-slate-200">
+        <!-- 프리셋 버튼들 -->
+        <div class="flex items-center gap-3">
+          {#each presetLabels as preset (preset.key)}
+            <button
+              class="px-6 py-3 rounded-full text-base font-bold transition-all duration-150
+                {filterPreset === preset.key
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-indigo-50 hover:text-indigo-600'}"
+              onclick={() => filterPreset = preset.key}
+            >{preset.label}</button>
+          {/each}
+          <button
+            class="px-6 py-3 rounded-full text-base font-bold transition-all duration-150
+              {filterPreset === 'custom'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-indigo-50 hover:text-indigo-600'}"
+            onclick={() => filterPreset = 'custom'}
+          >직접입력</button>
+        </div>
+
+        <!-- 직접입력 시 날짜 인풋 -->
+        {#if filterPreset === 'custom'}
+          <div class="flex items-center gap-3 ml-2">
+            <input
+              type="datetime-local"
+              bind:value={customFrom}
+              class="h-11 px-3 rounded-xl border border-slate-200 text-base font-medium text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-all"
+            />
+            <span class="text-slate-400 text-base font-bold">~</span>
+            <input
+              type="datetime-local"
+              bind:value={customTo}
+              class="h-11 px-3 rounded-xl border border-slate-200 text-base font-medium text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-all"
+            />
+          </div>
+        {/if}
+
+        <span class="ml-auto text-sm text-slate-500 font-bold">{filteredShipments.length}건</span>
       </div>
 
-      <!-- 모달 본문 -->
-      <div class="px-6 py-5 space-y-5 max-h-[70vh] overflow-y-auto">
+      <!-- 요약 카드 3개 -->
+      <div class="px-6 py-4 grid grid-cols-3 gap-4 shrink-0">
+        <!-- 총 건수 -->
+        <div class="bg-white rounded-2xl shadow-md px-5 py-4 flex items-center gap-4 border border-slate-100">
+          <div class="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center shrink-0">
+            <span class="text-xl">📦</span>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-slate-400 mb-0.5">총 건수</p>
+            <p class="text-3xl font-black text-indigo-700 leading-none">{totalCount}</p>
+            <p class="text-[10px] text-slate-400 mt-0.5">건</p>
+          </div>
+        </div>
+
+        <!-- 총 수량 -->
+        <div class="bg-white rounded-2xl shadow-md px-5 py-4 flex items-center gap-4 border border-slate-100">
+          <div class="w-12 h-12 bg-teal-100 rounded-xl flex items-center justify-center shrink-0">
+            <span class="text-xl">🧺</span>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-slate-400 mb-0.5">총 수량</p>
+            <p class="text-3xl font-black text-teal-600 leading-none">{totalQty}</p>
+            <p class="text-[10px] text-slate-400 mt-0.5">개</p>
+          </div>
+        </div>
+
+        <!-- 거래처 수 -->
+        <div class="bg-white rounded-2xl shadow-md px-5 py-4 flex items-center gap-4 border border-slate-100">
+          <div class="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center shrink-0">
+            <span class="text-xl">🏨</span>
+          </div>
+          <div>
+            <p class="text-xs font-bold text-slate-400 mb-0.5">거래처 수</p>
+            <p class="text-3xl font-black text-emerald-600 leading-none">{uniqueClients}</p>
+            <p class="text-[10px] text-slate-400 mt-0.5">곳</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 출고 기록 목록 -->
+      <div class="flex-1 overflow-y-auto px-6 pb-6">
+        {#if filteredShipments.length === 0}
+          <div class="h-full flex flex-col items-center justify-center gap-3 text-slate-400">
+            <span class="text-5xl">📋</span>
+            <p class="text-base font-semibold">출고 기록이 없습니다</p>
+            <p class="text-sm">선택한 기간에 출고 내역이 없습니다</p>
+          </div>
+        {:else}
+          <div class="flex flex-col gap-2">
+            {#each filteredShipments as shipment (shipment.id)}
+              {@const client = store.getClientById(shipment.clientId)}
+              {@const shipTotalQty = shipment.items.reduce((s, it) => s + it.quantity, 0)}
+              <!-- 클릭 가능한 행 -->
+              <div
+                class="bg-white rounded-2xl shadow-sm border border-slate-100 min-h-[64px] flex items-center gap-4 px-5 hover:shadow-md hover:border-indigo-200 transition-all duration-150 cursor-pointer group"
+                onclick={() => openEdit(shipment)}
+                role="button"
+                tabindex="0"
+                onkeydown={(e) => e.key === 'Enter' && openEdit(shipment)}
+                aria-label="출고 수정 열기"
+              >
+                <!-- 날짜/시간 -->
+                <div class="shrink-0 w-36">
+                  <p class="text-sm font-bold text-slate-700">{formatDateTime(shipment.shippedAt)}</p>
+                  <p class="text-xs text-slate-400 mt-0.5">등록: {formatDateTime(shipment.createdAt)}</p>
+                </div>
+
+                <!-- 구분선 -->
+                <div class="w-px h-10 bg-slate-100 shrink-0"></div>
+
+                <!-- 거래처명 -->
+                <div class="flex items-center gap-2 w-44 shrink-0">
+                  <span class="text-xl shrink-0">{clientIcons[client?.type ?? 'etc'] ?? '🏢'}</span>
+                  <div class="min-w-0">
+                    <p class="text-base font-bold text-slate-800 truncate">{client?.name ?? '알 수 없음'}</p>
+                    {#if client}
+                      <span class="text-[11px] font-semibold px-1.5 py-0.5 rounded-full
+                        {client.type === 'hotel' ? 'bg-blue-100 text-blue-600' :
+                         client.type === 'pension' ? 'bg-green-100 text-green-600' :
+                         client.type === 'resort' ? 'bg-purple-100 text-purple-600' :
+                         'bg-slate-100 text-slate-600'}">
+                        {client.type}
+                      </span>
+                    {/if}
+                  </div>
+                </div>
+
+                <!-- 구분선 -->
+                <div class="w-px h-10 bg-slate-100 shrink-0"></div>
+
+                <!-- 품목 chip들 -->
+                <div class="flex-1 flex flex-wrap gap-2 py-2">
+                  {#each shipment.items as it (it.laundryItemId)}
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold
+                      {categoryChipColors[it.category] ?? 'bg-slate-100 text-slate-600'}">
+                      {it.itemName}
+                      <span class="font-black">{it.quantity}</span>
+                    </span>
+                  {/each}
+                  {#if shipment.memo}
+                    <span class="text-xs text-slate-400 font-medium self-center">📝 {shipment.memo}</span>
+                  {/if}
+                </div>
+
+                <!-- 총 수량 -->
+                <div class="shrink-0 text-right w-20">
+                  <span class="text-2xl font-black text-indigo-700">{shipTotalQty}</span>
+                  <span class="text-sm font-bold text-indigo-400 ml-1">개</span>
+                </div>
+
+                <!-- 수정 버튼 -->
+                <button
+                  class="w-12 h-12 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-500 flex items-center justify-center text-lg transition-all active:scale-90 shrink-0 group-hover:bg-indigo-100 group-hover:shadow-sm"
+                  onclick={(e) => { e.stopPropagation(); openEdit(shipment); }}
+                  aria-label="수정"
+                >✏️</button>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ── 수정 슬라이드 패널 오버레이 ── -->
+{#if editingShipment}
+  {@const client = store.getClientById(editingShipment.clientId)}
+  <!-- 배경 오버레이 — 클릭으로 닫기 -->
+  <div
+    class="fixed inset-0 bg-black/40 z-40 flex items-stretch justify-end"
+    onclick={closeEdit}
+    onkeydown={(e) => { if (e.key === 'Escape') closeEdit(); }}
+    role="dialog"
+    tabindex="-1"
+    aria-modal="true"
+    aria-label="출고 수정"
+  >
+    <!-- 슬라이드 패널 -->
+    <div
+      class="bg-white w-[480px] max-h-full flex flex-col overflow-hidden shadow-2xl"
+      onclick={(e) => e.stopPropagation()}
+      role="none"
+    >
+      <!-- 패널 헤더 -->
+      <div class="bg-indigo-700 text-white px-6 py-5 flex items-center shrink-0">
+        <div class="flex-1 min-w-0">
+          <p class="text-lg font-black tracking-wide">출고 수정</p>
+          <p class="text-indigo-200 text-sm font-medium mt-0.5">{client?.name ?? ''}</p>
+        </div>
+        <button
+          class="w-10 h-10 rounded-xl bg-white/20 hover:bg-white/30 flex items-center justify-center text-white font-bold transition-all text-lg shrink-0"
+          onclick={closeEdit}
+        >✕</button>
+      </div>
+
+      <!-- 패널 내용 -->
+      <div class="flex-1 overflow-y-auto p-6 flex flex-col gap-5">
+
+        <!-- 출고 시간 수정 -->
+        <div>
+          <label for="edit-shipped-at" class="block text-sm font-bold text-slate-500 mb-2 uppercase tracking-wide">출고 시간</label>
+          <input
+            id="edit-shipped-at"
+            type="datetime-local"
+            bind:value={editShippedAt}
+            class="w-full h-12 px-4 rounded-xl border border-slate-200 text-base font-medium text-slate-700 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-all"
+          />
+        </div>
 
         <!-- 품목 수량 수정 -->
         <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">품목 수량</p>
-          <div class="space-y-3">
-            {#each editItems as item, idx (item.laundryItemId)}
-              <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+          <p class="text-sm font-bold text-slate-500 mb-3 uppercase tracking-wide">품목 수량</p>
+          <div class="flex flex-col gap-2.5">
+            {#each editItems as it, idx (it.laundryItemId)}
+              <div class="flex items-center gap-4 bg-indigo-50 border border-indigo-100 rounded-xl px-4 min-h-[56px]">
                 <div class="flex-1 min-w-0">
-                  <p class="font-bold text-sm text-slate-800 truncate">{item.itemName}</p>
-                  <span class="inline-block text-xs px-2 py-0.5 rounded-full mt-0.5 {catColor(item.category)}">
-                    {CATEGORY_LABELS[item.category as keyof typeof CATEGORY_LABELS] ?? item.category}
+                  <p class="text-base font-bold text-slate-800">{it.itemName}</p>
+                  <span class="text-[11px] font-bold px-2 py-0.5 rounded-full
+                    {categoryChipColors[it.category] ?? 'bg-slate-100 text-slate-600'}">
+                    {CATEGORY_LABELS[it.category as keyof typeof CATEGORY_LABELS] ?? it.category}
                   </span>
                 </div>
+                <!-- 수량 조절 -->
                 <div class="flex items-center gap-2 shrink-0">
                   <button
-                    type="button"
-                    aria-label="{item.itemName} 수량 줄이기"
-                    class="w-9 h-9 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-lg flex items-center justify-center transition-all duration-150 active:scale-90"
+                    class="w-10 h-10 rounded-lg bg-white border border-indigo-200 hover:bg-indigo-100 text-indigo-700 font-black flex items-center justify-center transition-all active:scale-90 text-xl"
                     onclick={() => adjustEditQty(idx, -1)}
                   >−</button>
-                  <span class="w-12 text-center text-lg font-extrabold text-slate-800">{item.quantity}</span>
+                  <span class="w-12 text-center text-xl font-black text-indigo-700">{it.quantity}</span>
                   <button
-                    type="button"
-                    aria-label="{item.itemName} 수량 늘리기"
-                    class="w-9 h-9 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-lg flex items-center justify-center transition-all duration-150 active:scale-90"
-                    onclick={() => adjustEditQty(idx, 1)}
+                    class="w-10 h-10 rounded-lg bg-white border border-indigo-200 hover:bg-indigo-100 text-indigo-700 font-black flex items-center justify-center transition-all active:scale-90 text-xl"
+                    onclick={() => adjustEditQty(idx, +1)}
                   >+</button>
                 </div>
               </div>
@@ -225,336 +482,52 @@
           </div>
         </div>
 
-        <!-- 배송기사 변경 -->
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">배송기사</p>
-          <div class="grid grid-cols-1 gap-2">
-            {#each store.drivers as driver (driver.id)}
+        <!-- 삭제 확인 영역 -->
+        {#if showDeleteConfirm}
+          <div class="bg-red-50 border border-red-200 rounded-xl p-4 flex flex-col gap-3">
+            <p class="text-sm font-bold text-red-700 text-center">정말 삭제하시겠습니까?</p>
+            <p class="text-xs text-red-500 text-center">이 작업은 되돌릴 수 없습니다</p>
+            <div class="flex gap-2">
               <button
-                type="button"
-                class="flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all duration-150 active:scale-95
-                  {editDriverId === driver.id
-                    ? 'border-emerald-400 bg-emerald-50 text-emerald-800'
-                    : 'border-slate-100 bg-white text-slate-600 hover:border-emerald-200'}"
-                onclick={() => { editDriverId = driver.id; }}
-              >
-                <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                  <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                  </svg>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <p class="font-bold text-sm">{driver.name}</p>
-                  <p class="text-xs text-slate-400">{driver.phone}</p>
-                </div>
-                {#if editDriverId === driver.id}
-                  <svg class="w-4 h-4 text-emerald-500 shrink-0" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                  </svg>
-                {/if}
-              </button>
-            {/each}
+                class="flex-1 h-11 rounded-xl font-bold text-sm bg-red-500 hover:bg-red-600 text-white transition-all active:scale-[0.98]"
+                onclick={deleteShipment}
+              >삭제 확인</button>
+              <button
+                class="flex-1 h-11 rounded-xl font-bold text-sm bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 transition-all active:scale-[0.98]"
+                onclick={() => showDeleteConfirm = false}
+              >취소</button>
+            </div>
           </div>
-        </div>
+        {/if}
 
-        <!-- 배송 시간 -->
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">배송 시간</p>
-          <input
-            type="datetime-local"
-            class="w-full h-12 rounded-xl border-2 border-slate-200 focus:border-emerald-400 outline-none px-4 text-slate-800 font-medium text-sm bg-white transition-all duration-150"
-            bind:value={editShippedAt}
-          />
-        </div>
-
-        <!-- 메모 -->
-        <div>
-          <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">메모</p>
-          <textarea
-            class="w-full rounded-xl border-2 border-slate-200 focus:border-emerald-400 outline-none px-4 py-3 text-slate-800 text-sm bg-white resize-none transition-all duration-150"
-            rows="2"
-            placeholder="메모를 입력하세요..."
-            bind:value={editMemo}
-          ></textarea>
-        </div>
       </div>
 
-      <!-- 모달 하단 버튼 -->
-      <div class="px-6 py-4 border-t border-slate-100 flex gap-3">
+      <!-- 패널 하단 버튼 -->
+      <div class="px-6 pb-6 pt-4 flex flex-col gap-2.5 shrink-0 border-t border-slate-100 bg-white">
+        <!-- 저장/취소 -->
+        <div class="flex gap-2">
+          <button
+            class="flex-1 h-14 rounded-xl font-bold text-base bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition-all active:scale-[0.98]"
+            onclick={saveEdit}
+          >저장</button>
+          <button
+            class="flex-1 h-14 rounded-xl font-bold text-base bg-slate-100 hover:bg-slate-200 text-slate-500 transition-all active:scale-[0.98]"
+            onclick={closeEdit}
+          >취소</button>
+        </div>
+        <!-- 재출력 버튼 -->
         <button
-          type="button"
-          class="flex-1 h-12 rounded-xl font-bold text-sm bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all duration-150 active:scale-95"
-          onclick={closeEditModal}
-        >
-          닫기
-        </button>
-        <button
-          type="button"
-          class="flex-1 h-12 rounded-xl font-bold text-sm bg-emerald-500 hover:bg-emerald-600 text-white transition-all duration-150 active:scale-95 shadow-md shadow-emerald-200"
-          onclick={saveEdit}
-        >
-          ✓ 저장
-        </button>
+          class="w-full h-12 rounded-xl font-bold text-sm bg-teal-600 hover:bg-teal-700 text-white transition-all active:scale-[0.98] shadow-sm"
+          onclick={reprintSlip}
+        >🖨️ 전표 재출력</button>
+        <!-- 삭제 -->
+        {#if !showDeleteConfirm}
+          <button
+            class="w-full h-12 rounded-xl font-bold text-sm bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 transition-all active:scale-[0.98]"
+            onclick={() => showDeleteConfirm = true}
+          >🗑️ 이 출고 기록 삭제</button>
+        {/if}
       </div>
     </div>
   </div>
 {/if}
-
-<!-- ════════════════════════════════════════════════════════════════
-     메인 레이아웃
-════════════════════════════════════════════════════════════════ -->
-<div class="flex h-screen bg-emerald-50 overflow-hidden">
-
-  <!-- ════════════════════════════════════════════════════════════
-       왼쪽 사이드바: 거래처 목록
-  ════════════════════════════════════════════════════════════ -->
-  <aside class="w-64 flex flex-col bg-white border-r border-emerald-100 shadow-sm shrink-0">
-
-    <!-- 헤더 -->
-    <div class="px-5 py-5 border-b border-emerald-100">
-      <div class="flex items-center gap-2">
-        <div class="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
-          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-          </svg>
-        </div>
-        <span class="text-base font-bold text-slate-800">거래처</span>
-      </div>
-    </div>
-
-    <!-- 전체 보기 버튼 -->
-    <div class="px-3 pt-3">
-      <button
-        type="button"
-        class="w-full text-left px-4 py-3 rounded-xl font-medium text-sm transition-all duration-150 active:scale-95
-          {store.selectedClientId === null
-            ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200'
-            : 'text-slate-500 hover:bg-emerald-50 hover:text-emerald-700'}"
-        onclick={() => store.selectClient(null as unknown as string)}
-      >
-        <div class="font-bold text-base">전체 거래처</div>
-        <div class="text-xs mt-0.5 {store.selectedClientId === null ? 'text-emerald-100' : 'text-slate-400'}">
-          모든 거래처 출고 현황
-        </div>
-      </button>
-    </div>
-
-    <!-- 거래처 목록 -->
-    <nav class="flex-1 overflow-y-auto py-2 px-3 space-y-1">
-      {#each store.clients as client (client.id)}
-        <button
-          type="button"
-          class="w-full text-left px-4 py-3 rounded-xl font-medium text-sm transition-all duration-150 active:scale-95
-            {store.selectedClientId === client.id
-              ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200'
-              : 'text-slate-700 hover:bg-emerald-50 hover:text-emerald-700'}"
-          onclick={() => store.selectClient(client.id)}
-        >
-          <div class="font-bold text-base">{client.name}</div>
-          <div class="text-xs mt-0.5 {store.selectedClientId === client.id ? 'text-emerald-100' : 'text-slate-400'}">
-            {client.type === 'hotel' ? '호텔' : client.type === 'pension' ? '펜션' : client.type === 'resort' ? '리조트' : '기타'}
-          </div>
-        </button>
-      {/each}
-    </nav>
-
-    <!-- 하단 네비 -->
-    <div class="p-3 border-t border-emerald-100 space-y-2">
-      <button
-        type="button"
-        class="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-medium text-sm transition-all duration-150 active:scale-95"
-        onclick={() => void goto('/theme-a')}
-      >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-        </svg>
-        세탁물 관리
-      </button>
-      <button
-        type="button"
-        class="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium text-sm transition-all duration-150 active:scale-95"
-        onclick={() => void goto('/theme-a/shipout')}
-      >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
-        </svg>
-        출고 신청
-      </button>
-      <button
-        type="button"
-        class="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium text-sm transition-all duration-150 active:scale-95"
-        onclick={() => void goto('/')}
-      >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-        </svg>
-        홈으로
-      </button>
-    </div>
-  </aside>
-
-  <!-- ════════════════════════════════════════════════════════════
-       메인 콘텐츠
-  ════════════════════════════════════════════════════════════ -->
-  <main class="flex-1 flex flex-col overflow-hidden">
-
-    <!-- 상단 헤더 -->
-    <header class="bg-white border-b border-emerald-100 px-6 py-5 shadow-sm shrink-0">
-      <div class="flex items-start justify-between gap-4 flex-wrap">
-        <!-- 제목 -->
-        <div>
-          <h1 class="text-2xl font-extrabold text-slate-800">📋 출고 현황</h1>
-          {#if store.selectedClient}
-            <p class="text-sm text-slate-400 mt-0.5">{store.selectedClient.name}</p>
-          {:else}
-            <p class="text-sm text-slate-400 mt-0.5">전체 거래처</p>
-          {/if}
-        </div>
-
-        <!-- 기간 필터 -->
-        <div class="flex flex-col gap-3">
-          <!-- 빠른 선택 버튼 -->
-          <div class="flex gap-2">
-            {#each quickFilters as { key, label } (key)}
-              <button
-                type="button"
-                class="px-4 py-2 rounded-xl text-sm font-bold transition-all duration-150 active:scale-95
-                  {quickFilter === key
-                    ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200'
-                    : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700'}"
-                onclick={() => applyQuick(key)}
-              >
-                {label}
-              </button>
-            {/each}
-          </div>
-          <!-- 날짜 직접 입력 -->
-          <div class="flex items-center gap-2">
-            <input
-              type="datetime-local"
-              class="h-10 rounded-xl border-2 border-slate-200 focus:border-emerald-400 outline-none px-3 text-slate-700 text-sm bg-white transition-all duration-150"
-              bind:value={fromDate}
-              onchange={() => { quickFilter = 'custom'; }}
-            />
-            <span class="text-slate-400 font-bold text-sm">~</span>
-            <input
-              type="datetime-local"
-              class="h-10 rounded-xl border-2 border-slate-200 focus:border-emerald-400 outline-none px-3 text-slate-700 text-sm bg-white transition-all duration-150"
-              bind:value={toDate}
-              onchange={() => { quickFilter = 'custom'; }}
-            />
-          </div>
-        </div>
-      </div>
-
-      <!-- 요약 통계 카드 -->
-      <div class="grid grid-cols-4 gap-3 mt-5">
-        <div class="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3">
-          <p class="text-xs font-bold text-emerald-600 mb-1">총 출고 건수</p>
-          <p class="text-2xl font-extrabold text-emerald-700">{totalShipmentCount} <span class="text-sm font-bold">건</span></p>
-        </div>
-        <div class="rounded-xl bg-indigo-50 border border-indigo-200 px-4 py-3">
-          <p class="text-xs font-bold text-indigo-600 mb-1">총 출고 수량</p>
-          <p class="text-2xl font-extrabold text-indigo-700">{totalItemCount} <span class="text-sm font-bold">개</span></p>
-        </div>
-        <div class="rounded-xl bg-sky-50 border border-sky-200 px-4 py-3">
-          <p class="text-xs font-bold text-sky-600 mb-1">타올 / 시트</p>
-          <p class="text-2xl font-extrabold text-sky-700">
-            {categorySummary['towel'] ?? 0}
-            <span class="text-sm font-bold text-slate-400 mx-1">/</span>
-            {categorySummary['sheet'] ?? 0}
-            <span class="text-sm font-bold text-slate-400 ml-1">개</span>
-          </p>
-        </div>
-        <div class="rounded-xl bg-orange-50 border border-orange-200 px-4 py-3">
-          <p class="text-xs font-bold text-orange-600 mb-1">유니폼</p>
-          <p class="text-2xl font-extrabold text-orange-700">{categorySummary['uniform'] ?? 0} <span class="text-sm font-bold">개</span></p>
-        </div>
-      </div>
-    </header>
-
-    <!-- 출고 기록 목록 -->
-    <div class="flex-1 overflow-y-auto p-6">
-      {#if shipments.length === 0}
-        <div class="flex flex-col items-center justify-center h-full text-slate-400">
-          <svg class="w-16 h-16 mb-4 opacity-30" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
-          </svg>
-          <p class="text-lg font-medium">해당 기간에 출고 기록이 없습니다</p>
-          <p class="text-sm mt-1 text-slate-300">기간을 변경하거나 다른 거래처를 선택해 주세요</p>
-        </div>
-      {:else}
-        <div class="space-y-4">
-          {#each shipments as shipment (shipment.id)}
-            {@const driver = store.getDriverById(shipment.driverId)}
-            {@const client = store.getClientById(shipment.clientId)}
-            {@const shipTotal = shipment.items.reduce((a, i) => a + i.quantity, 0)}
-            <div
-              class="bg-white rounded-2xl border-2 border-slate-100 shadow-sm hover:border-emerald-200 hover:shadow-md transition-all duration-150 overflow-hidden cursor-pointer group"
-              onclick={() => openEditModal(shipment)}
-              role="button"
-              tabindex="0"
-              onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') openEditModal(shipment); }}
-            >
-              <!-- 카드 헤더 -->
-              <div class="flex items-start justify-between px-5 py-4 border-b border-slate-100 group-hover:bg-emerald-50 transition-colors duration-150">
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-3 flex-wrap">
-                    <!-- 날짜 -->
-                    <span class="text-base font-extrabold text-slate-800">
-                      {formatDateShort(shipment.shippedAt)}
-                    </span>
-                    <!-- 거래처 (전체 보기일 때) -->
-                    {#if !store.selectedClientId && client}
-                      <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
-                        {client.name}
-                      </span>
-                    {/if}
-                    <!-- 기사 이름 -->
-                    {#if driver}
-                      <div class="flex items-center gap-1.5 text-sm text-slate-500">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                        </svg>
-                        <span class="font-medium">{driver.name}</span>
-                      </div>
-                    {/if}
-                    <!-- 메모 -->
-                    {#if shipment.memo}
-                      <span class="text-sm text-slate-400 italic truncate max-w-50">"{shipment.memo}"</span>
-                    {/if}
-                  </div>
-                </div>
-                <!-- 총 수량 + 수정 아이콘 -->
-                <div class="flex items-center gap-3 shrink-0 ml-4">
-                  <div class="text-right">
-                    <p class="text-xs text-slate-400 font-medium">총 수량</p>
-                    <p class="text-xl font-extrabold text-emerald-700">{shipTotal}<span class="text-sm font-bold text-slate-400 ml-1">개</span></p>
-                  </div>
-                  <div class="w-9 h-9 rounded-full bg-slate-100 group-hover:bg-emerald-100 group-hover:text-emerald-600 text-slate-400 flex items-center justify-center transition-all duration-150">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 품목 목록 -->
-              <div class="px-5 py-3">
-                <div class="flex flex-wrap gap-2">
-                  {#each shipment.items as item (item.laundryItemId)}
-                    <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl {catColor(item.category)}">
-                      <span class="text-sm font-bold">{item.itemName}</span>
-                      <span class="text-base font-extrabold">{item.quantity}</span>
-                      <span class="text-xs opacity-70">개</span>
-                    </div>
-                  {/each}
-                </div>
-              </div>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </div>
-  </main>
-</div>

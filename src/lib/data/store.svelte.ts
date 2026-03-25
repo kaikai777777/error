@@ -11,7 +11,6 @@ import type {
 	LaundryItemStatus,
 	LaundryStatusCounts,
 	Shipment,
-
 	ThemeOption
 } from './types.js';
 
@@ -53,6 +52,7 @@ export const CATEGORY_LABELS: Record<LaundryCategory, string> = {
 	all: '전체'
 };
 
+// received/washing 제거 — 앱에서 사용하는 상태만 정의
 export const STATUS_LABELS: Record<LaundryItemStatus, string> = {
 	received: '입고',
 	washing: '세탁중',
@@ -62,31 +62,47 @@ export const STATUS_LABELS: Record<LaundryItemStatus, string> = {
 	shipped: '출고'
 };
 
+// 화면에 표시할 상태 (입고·세탁중 제외)
+export const DISPLAY_STATUSES: Array<'completed' | 'defect' | 'stock'> = [
+	'completed',
+	'defect',
+	'stock'
+];
+
+export const DISPLAY_STATUS_LABELS: Record<'completed' | 'defect' | 'stock', string> = {
+	completed: '세탁완료',
+	defect: '불량',
+	stock: '재고'
+};
+
 // ------------------------------------------------------------------
-// 유틸: 랜덤 숫자 생성
+// 유틸
 // ------------------------------------------------------------------
 
 function rand(min: number, max: number): number {
 	return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function randomCounts(): LaundryStatusCounts {
-	return {
-		received: rand(20, 100),
-		washing: rand(5, 30),
-		completed: rand(10, 50),
-		defect: rand(0, 5),
-		stock: rand(5, 20),
-		shipped: rand(10, 60)
-	};
-}
-
-// ------------------------------------------------------------------
-// 유틸: ID 생성
-// ------------------------------------------------------------------
-
 function generateId(): string {
 	return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
+/** stock = completed + defect */
+function calcStock(completed: number, defect: number): number {
+	return completed + defect;
+}
+
+function randomCounts(): LaundryStatusCounts {
+	const completed = rand(10, 60);
+	const defect = rand(0, 5);
+	return {
+		received: 0,
+		washing: 0,
+		completed,
+		defect,
+		stock: calcStock(completed, defect),
+		shipped: rand(10, 60)
+	};
 }
 
 // ------------------------------------------------------------------
@@ -141,7 +157,7 @@ const initialClients: Client[] = [
 ];
 
 // ------------------------------------------------------------------
-// 초기 데이터: 세탁 품목 (거래처별 × 전 품목)
+// 초기 데이터: 세탁 품목
 // ------------------------------------------------------------------
 
 function buildLaundryItems(): LaundryItem[] {
@@ -180,7 +196,7 @@ const initialDrivers: Driver[] = [
 ];
 
 // ------------------------------------------------------------------
-// 초기 데이터: 출고 기록 (샘플)
+// 초기 데이터: 출고 기록
 // ------------------------------------------------------------------
 
 const initialShipments: Shipment[] = [
@@ -188,18 +204,8 @@ const initialShipments: Shipment[] = [
 		id: 'ship-001',
 		clientId: 'client-001',
 		items: [
-			{
-				laundryItemId: 'client-001__대타올',
-				itemName: '대타올',
-				category: 'towel',
-				quantity: 30
-			},
-			{
-				laundryItemId: 'client-001__시트D',
-				itemName: '시트D',
-				category: 'sheet',
-				quantity: 20
-			}
+			{ laundryItemId: 'client-001__대타올', itemName: '대타올', category: 'towel', quantity: 30 },
+			{ laundryItemId: 'client-001__시트D', itemName: '시트D', category: 'sheet', quantity: 20 }
 		],
 		driverId: 'driver-001',
 		memo: '오전 배송',
@@ -210,18 +216,8 @@ const initialShipments: Shipment[] = [
 		id: 'ship-002',
 		clientId: 'client-002',
 		items: [
-			{
-				laundryItemId: 'client-002__중타올',
-				itemName: '중타올',
-				category: 'towel',
-				quantity: 15
-			},
-			{
-				laundryItemId: 'client-002__베개커버',
-				itemName: '베개커버',
-				category: 'sheet',
-				quantity: 25
-			}
+			{ laundryItemId: 'client-002__중타올', itemName: '중타올', category: 'towel', quantity: 15 },
+			{ laundryItemId: 'client-002__베개커버', itemName: '베개커버', category: 'sheet', quantity: 25 }
 		],
 		driverId: 'driver-002',
 		shippedAt: '2025-06-03T10:00:00.000Z',
@@ -231,18 +227,8 @@ const initialShipments: Shipment[] = [
 		id: 'ship-003',
 		clientId: 'client-003',
 		items: [
-			{
-				laundryItemId: 'client-003__상의',
-				itemName: '상의',
-				category: 'uniform',
-				quantity: 10
-			},
-			{
-				laundryItemId: 'client-003__하의',
-				itemName: '하의',
-				category: 'uniform',
-				quantity: 10
-			}
+			{ laundryItemId: 'client-003__상의', itemName: '상의', category: 'uniform', quantity: 10 },
+			{ laundryItemId: 'client-003__하의', itemName: '하의', category: 'uniform', quantity: 10 }
 		],
 		driverId: 'driver-003',
 		memo: '유니폼 정기 배송',
@@ -252,7 +238,7 @@ const initialShipments: Shipment[] = [
 ];
 
 // ------------------------------------------------------------------
-// 스토어 클래스 (Svelte 5 Runes)
+// 스토어 클래스
 // ------------------------------------------------------------------
 
 class LaundryStore {
@@ -262,24 +248,19 @@ class LaundryStore {
 	shipments = $state<Shipment[]>(initialShipments);
 	drivers = $state<Driver[]>(initialDrivers);
 	selectedClientId = $state<string | null>(initialClients[0]?.id ?? null);
-	selectedTheme = $state<ThemeOption>('a');
+	selectedTheme = $state<ThemeOption>('b');
 
-	// ── 파생 상태 ($derived) ───────────────────────────────────────
+	// ── 파생 상태 ──────────────────────────────────────────────────
 
-	/** 현재 선택된 거래처 객체 */
 	selectedClient = $derived(
 		this.clients.find((c) => c.id === this.selectedClientId) ?? null
 	);
 
-	/** 현재 선택된 거래처의 세탁 품목 */
 	selectedClientItems = $derived(
 		this.laundryItems.filter((item) => item.clientId === this.selectedClientId)
 	);
 
-	/** 전체 거래처 수 */
 	clientCount = $derived(this.clients.length);
-
-	/** 전체 출고 건수 */
 	shipmentCount = $derived(this.shipments.length);
 
 	// ------------------------------------------------------------------
@@ -294,7 +275,6 @@ class LaundryStore {
 		};
 		this.clients = [...this.clients, newClient];
 
-		// 새 거래처의 세탁 품목 자동 생성
 		const now = new Date().toISOString();
 		const newItems: LaundryItem[] = [];
 		for (const [cat, names] of Object.entries(CATEGORY_ITEMS) as [
@@ -313,7 +293,6 @@ class LaundryStore {
 			}
 		}
 		this.laundryItems = [...this.laundryItems, ...newItems];
-
 		return newClient;
 	}
 
@@ -335,11 +314,8 @@ class LaundryStore {
 	// ------------------------------------------------------------------
 
 	/**
-	 * 특정 거래처의 특정 품목 상태 수량 업데이트
-	 * @param clientId  거래처 ID
-	 * @param itemId    품목 ID (예: "client-001__대타올")
-	 * @param field     상태 필드 (LaundryItemStatus)
-	 * @param value     새 수량
+	 * 특정 품목 단일 상태 수정
+	 * completed 또는 defect 변경 시 stock 자동 재계산
 	 */
 	updateLaundryItem(
 		clientId: string,
@@ -349,18 +325,18 @@ class LaundryStore {
 	): void {
 		this.laundryItems = this.laundryItems.map((item) => {
 			if (item.id === itemId && item.clientId === clientId) {
-				return {
-					...item,
-					counts: { ...item.counts, [field]: Math.max(0, value) },
-					updatedAt: new Date().toISOString()
-				};
+				const newCounts = { ...item.counts, [field]: Math.max(0, value) };
+				// stock 자동 계산 (completed + defect)
+				newCounts.stock = calcStock(newCounts.completed, newCounts.defect);
+				return { ...item, counts: newCounts, updatedAt: new Date().toISOString() };
 			}
 			return item;
 		});
 	}
 
 	/**
-	 * 특정 품목의 여러 상태 수량 일괄 업데이트
+	 * 여러 상태 일괄 수정
+	 * completed / defect 포함 시 stock 자동 재계산
 	 */
 	updateLaundryItemCounts(
 		clientId: string,
@@ -369,23 +345,56 @@ class LaundryStore {
 	): void {
 		this.laundryItems = this.laundryItems.map((item) => {
 			if (item.id === itemId && item.clientId === clientId) {
-				return {
-					...item,
-					counts: { ...item.counts, ...counts },
-					updatedAt: new Date().toISOString()
-				};
+				const newCounts = { ...item.counts, ...counts };
+				newCounts.stock = calcStock(newCounts.completed, newCounts.defect);
+				return { ...item, counts: newCounts, updatedAt: new Date().toISOString() };
 			}
 			return item;
 		});
 	}
 
 	// ------------------------------------------------------------------
-	// 출고 기록 CRUD
+	// 불량 처리
 	// ------------------------------------------------------------------
 
-	addShipment(
-		shipment: Omit<Shipment, 'id' | 'createdAt'>
-	): Shipment {
+	/**
+	 * 불량 품목 처리 (폐기 / 반환 등)
+	 * defect 에서 processQty 만큼 차감, stock 재계산
+	 * @param clientId   거래처 ID
+	 * @param itemId     품목 ID
+	 * @param processQty 처리할 불량 수량
+	 */
+	processDefect(clientId: string, itemId: string, processQty: number): void {
+		this.laundryItems = this.laundryItems.map((item) => {
+			if (item.id === itemId && item.clientId === clientId) {
+				const newDefect = Math.max(0, item.counts.defect - processQty);
+				const newCounts = { ...item.counts, defect: newDefect };
+				newCounts.stock = calcStock(newCounts.completed, newCounts.defect);
+				return { ...item, counts: newCounts, updatedAt: new Date().toISOString() };
+			}
+			return item;
+		});
+	}
+
+	/**
+	 * 불량 전체 처리 (해당 품목의 defect → 0)
+	 */
+	processDefectAll(clientId: string, itemId: string): void {
+		this.laundryItems = this.laundryItems.map((item) => {
+			if (item.id === itemId && item.clientId === clientId) {
+				const newCounts = { ...item.counts, defect: 0 };
+				newCounts.stock = calcStock(newCounts.completed, 0);
+				return { ...item, counts: newCounts, updatedAt: new Date().toISOString() };
+			}
+			return item;
+		});
+	}
+
+	// ------------------------------------------------------------------
+	// 출고 처리
+	// ------------------------------------------------------------------
+
+	addShipment(shipment: Omit<Shipment, 'id' | 'createdAt'>): Shipment {
 		const newShipment: Shipment = {
 			...shipment,
 			id: `ship-${generateId()}`,
@@ -393,6 +402,28 @@ class LaundryStore {
 		};
 		this.shipments = [newShipment, ...this.shipments];
 		return newShipment;
+	}
+
+	/**
+	 * 출고 확정: completed 차감, shipped 증가, stock 재계산
+	 */
+	applyShipout(clientId: string, items: Array<{ itemId: string; quantity: number }>): void {
+		for (const { itemId, quantity } of items) {
+			this.laundryItems = this.laundryItems.map((item) => {
+				if (item.id === itemId && item.clientId === clientId) {
+					const newCompleted = Math.max(0, item.counts.completed - quantity);
+					const newShipped = item.counts.shipped + quantity;
+					const newCounts = {
+						...item.counts,
+						completed: newCompleted,
+						shipped: newShipped
+					};
+					newCounts.stock = calcStock(newCounts.completed, newCounts.defect);
+					return { ...item, counts: newCounts, updatedAt: new Date().toISOString() };
+				}
+				return item;
+			});
+		}
 	}
 
 	updateShipment(id: string, updates: Partial<Omit<Shipment, 'id' | 'createdAt'>>): void {
@@ -410,10 +441,7 @@ class LaundryStore {
 	// ------------------------------------------------------------------
 
 	addDriver(driver: Omit<Driver, 'id'>): Driver {
-		const newDriver: Driver = {
-			...driver,
-			id: `driver-${generateId()}`
-		};
+		const newDriver: Driver = { ...driver, id: `driver-${generateId()}` };
 		this.drivers = [...this.drivers, newDriver];
 		return newDriver;
 	}
@@ -430,30 +458,15 @@ class LaundryStore {
 	// 조회 헬퍼
 	// ------------------------------------------------------------------
 
-	/**
-	 * 특정 거래처의 카테고리별 품목 목록 반환
-	 * category = 'all' 이면 전체 반환
-	 */
 	getItemsByCategory(clientId: string, category: LaundryCategory): LaundryItem[] {
 		const items = this.laundryItems.filter((item) => item.clientId === clientId);
 		if (category === 'all') return items;
 		return items.filter((item) => item.category === category);
 	}
 
-	/**
-	 * 특정 거래처의 날짜 범위 내 출고 기록 반환
-	 * @param clientId  거래처 ID (null 이면 전체 거래처)
-	 * @param from      시작 ISO 8601 문자열
-	 * @param to        종료 ISO 8601 문자열
-	 */
-	getShipmentsByDateRange(
-		clientId: string | null,
-		from: string,
-		to: string
-	): Shipment[] {
+	getShipmentsByDateRange(clientId: string | null, from: string, to: string): Shipment[] {
 		const fromTs = new Date(from).getTime();
 		const toTs = new Date(to).getTime();
-
 		return this.shipments.filter((s) => {
 			const ts = new Date(s.shippedAt).getTime();
 			const inRange = ts >= fromTs && ts <= toTs;
@@ -462,21 +475,10 @@ class LaundryStore {
 		});
 	}
 
-	/**
-	 * 특정 거래처의 카테고리별 상태 합산 반환
-	 */
-	getCategorySummary(
-		clientId: string,
-		category: LaundryCategory
-	): LaundryStatusCounts {
+	getCategorySummary(clientId: string, category: LaundryCategory): LaundryStatusCounts {
 		const items = this.getItemsByCategory(clientId, category);
 		const totals: LaundryStatusCounts = {
-			received: 0,
-			washing: 0,
-			completed: 0,
-			defect: 0,
-			stock: 0,
-			shipped: 0
+			received: 0, washing: 0, completed: 0, defect: 0, stock: 0, shipped: 0
 		};
 		for (const item of items) {
 			for (const key of Object.keys(totals) as LaundryItemStatus[]) {
@@ -486,23 +488,34 @@ class LaundryStore {
 		return totals;
 	}
 
-	/**
-	 * 배송기사 ID로 기사 정보 반환
-	 */
+	/** 거래처 전체 세탁완료 합계 */
+	getTotalCompleted(clientId: string): number {
+		return this.laundryItems
+			.filter((i) => i.clientId === clientId)
+			.reduce((sum, i) => sum + i.counts.completed, 0);
+	}
+
+	/** 거래처 전체 불량 합계 */
+	getTotalDefect(clientId: string): number {
+		return this.laundryItems
+			.filter((i) => i.clientId === clientId)
+			.reduce((sum, i) => sum + i.counts.defect, 0);
+	}
+
+	/** 거래처 전체 재고 합계 */
+	getTotalStock(clientId: string): number {
+		return this.laundryItems
+			.filter((i) => i.clientId === clientId)
+			.reduce((sum, i) => sum + i.counts.stock, 0);
+	}
+
 	getDriverById(id: string): Driver | undefined {
 		return this.drivers.find((d) => d.id === id);
 	}
 
-	/**
-	 * 거래처 ID로 거래처 정보 반환
-	 */
 	getClientById(id: string): Client | undefined {
 		return this.clients.find((c) => c.id === id);
 	}
-
-	// ------------------------------------------------------------------
-	// 선택 상태 변경
-	// ------------------------------------------------------------------
 
 	selectClient(clientId: string | null): void {
 		this.selectedClientId = clientId;
@@ -514,7 +527,7 @@ class LaundryStore {
 }
 
 // ------------------------------------------------------------------
-// 싱글톤 스토어 인스턴스 export
+// 싱글톤 export
 // ------------------------------------------------------------------
 
 export const store = new LaundryStore();

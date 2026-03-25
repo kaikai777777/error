@@ -1,399 +1,350 @@
 <script lang="ts">
-  import { store, CATEGORY_LABELS, STATUS_LABELS } from '$lib/data/store.svelte';
-  import NumPad from '$lib/components/NumPad.svelte';
   import { goto } from '$app/navigation';
+  import { store, CATEGORY_LABELS } from '$lib/data/store.svelte';
+  import NumPad from '$lib/components/NumPad.svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import type { LaundryCategory, LaundryItemStatus, LaundryItem } from '$lib/data/types';
+  import type { LaundryCategory, LaundryItem } from '$lib/data/types';
 
-  // ── 탭 상태 ──────────────────────────────────────────────────────
-  let activeTab = $state<LaundryCategory>('all');
-
-  // ── 카드 선택 상태 ────────────────────────────────────────────────
-  let selectedItemIds = new SvelteSet<string>();
-
-  // ── 오른쪽 패널 상태 ──────────────────────────────────────────────
-  let selectedField = $state<LaundryItemStatus>('received');
+  let selectedCategory = $state<LaundryCategory>('all');
+  let selectedItemIds = $state(new SvelteSet<string>());
+  let activeField = $state<'completed' | 'defect'>('completed');
   let inputValue = $state('');
 
-  // ── 현재 거래처 + 탭에 해당하는 품목 목록 ─────────────────────────
-  let filteredItems = $derived<LaundryItem[]>(
+  let currentItems = $derived(
     store.selectedClientId
-      ? store.getItemsByCategory(store.selectedClientId, activeTab)
+      ? store.getItemsByCategory(store.selectedClientId, selectedCategory)
       : []
   );
 
-  // ── 선택된 품목 객체 목록 ─────────────────────────────────────────
-  let selectedItems = $derived<LaundryItem[]>(
-    filteredItems.filter((item) => selectedItemIds.has(item.id))
+  let selectedItems = $derived(
+    currentItems.filter(item => selectedItemIds.has(item.id))
   );
 
-  // ── 탭 변경 시 선택 초기화 ────────────────────────────────────────
-  $effect(() => {
-    void activeTab;
-    selectedItemIds.clear();
-  });
+  const clientIcons: Record<string, string> = {
+    hotel: '🏨',
+    pension: '🏡',
+    resort: '🌴',
+    etc: '🏢'
+  };
 
-  // ── 거래처 변경 시 선택 초기화 ────────────────────────────────────
-  $effect(() => {
-    void store.selectedClientId;
-    selectedItemIds.clear();
-    inputValue = '';
-  });
+  const categoryOrder: LaundryCategory[] = ['all', 'towel', 'sheet', 'uniform'];
 
-  // ── 카드 토글 ────────────────────────────────────────────────────
-  function toggleItem(id: string) {
-    if (selectedItemIds.has(id)) {
-      selectedItemIds.delete(id);
+  function toggleItemSelection(item: LaundryItem) {
+    if (selectedItemIds.has(item.id)) {
+      selectedItemIds.delete(item.id);
     } else {
-      selectedItemIds.add(id);
-    }
-  }
-
-  // ── 입력 적용 ────────────────────────────────────────────────────
-  function applyInput() {
-    const num = parseInt(inputValue, 10);
-    if (isNaN(num) || num < 0) return;
-    if (!store.selectedClientId) return;
-    for (const item of selectedItems) {
-      store.updateLaundryItem(store.selectedClientId, item.id, selectedField, num);
+      selectedItemIds.add(item.id);
     }
     inputValue = '';
   }
 
-  // ── 세탁완료 일괄 처리 (washing → completed) ──────────────────────
-  function bulkComplete() {
-    if (!store.selectedClientId) return;
-    for (const item of selectedItems) {
-      const washing = item.counts.washing;
-      if (washing <= 0) continue;
-      store.updateLaundryItem(store.selectedClientId, item.id, 'completed', item.counts.completed + washing);
-      store.updateLaundryItem(store.selectedClientId, item.id, 'washing', 0);
-    }
+  function selectClient(id: string) {
+    store.selectClient(id);
+    selectedItemIds = new SvelteSet();
+    inputValue = '';
   }
 
-  // ── 필드 버튼 목록 ────────────────────────────────────────────────
-  const fieldButtons: { key: LaundryItemStatus; label: string; color: string }[] = [
-    { key: 'received',  label: '입고',     color: 'bg-blue-100 text-blue-700 border-blue-200' },
-    { key: 'washing',   label: '세탁중',   color: 'bg-amber-100 text-amber-700 border-amber-200' },
-    { key: 'completed', label: '세탁완료', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-    { key: 'defect',    label: '불량',     color: 'bg-red-100 text-red-700 border-red-200' },
-    { key: 'stock',     label: '재고',     color: 'bg-purple-100 text-purple-700 border-purple-200' },
-  ];
+  function applyValue() {
+    const num = parseInt(inputValue, 10);
+    if (isNaN(num) || num < 0 || !store.selectedClientId) return;
+    for (const item of selectedItems) {
+      store.updateLaundryItem(store.selectedClientId, item.id, activeField, num);
+    }
+    inputValue = '';
+  }
 
-  const selectedFieldColor: Record<LaundryItemStatus, string> = {
-    received:  'bg-blue-500 text-white border-blue-500',
-    washing:   'bg-amber-500 text-white border-amber-500',
-    completed: 'bg-emerald-500 text-white border-emerald-500',
-    defect:    'bg-red-500 text-white border-red-500',
-    stock:     'bg-purple-500 text-white border-purple-500',
-    shipped:   'bg-slate-500 text-white border-slate-500',
+  function getCardState(item: LaundryItem) {
+    const isSelected = selectedItemIds.has(item.id);
+    const hasDefect = item.counts.defect > 0;
+    const isDone = item.counts.completed > 0 && item.counts.defect === 0;
+    if (isSelected) return 'selected';
+    if (hasDefect) return 'defect';
+    if (isDone) return 'done';
+    return 'normal';
+  }
+
+  function cardClass(item: LaundryItem) {
+    const s = getCardState(item);
+    const base = 'relative bg-white rounded-2xl shadow-md p-6 min-h-[160px] cursor-pointer transition-all duration-150 active:scale-[0.98] flex flex-col gap-4 select-none';
+    if (s === 'selected') return base + ' ring-4 ring-indigo-400 bg-indigo-50 shadow-lg';
+    if (s === 'defect')   return base + ' ring-2 ring-rose-200 bg-rose-50';
+    if (s === 'done')     return base + ' ring-2 ring-emerald-300 bg-emerald-50';
+    return base + ' hover:shadow-lg hover:ring-1 hover:ring-slate-200';
+  }
+
+  const categoryBadgeColors: Record<string, string> = {
+    towel:   'bg-sky-100 text-sky-700',
+    sheet:   'bg-violet-100 text-violet-700',
+    uniform: 'bg-amber-100 text-amber-700'
   };
 
-  // ── 카테고리 탭 배열 ──────────────────────────────────────────────
-  const tabs: LaundryCategory[] = ['all', 'towel', 'sheet', 'uniform'];
-
-  // ── 상태별 뱃지 색상 ──────────────────────────────────────────────
-  const statusColors: Partial<Record<LaundryItemStatus, string>> = {
-    received:  'bg-blue-50 text-blue-600',
-    washing:   'bg-amber-50 text-amber-600',
-    completed: 'bg-emerald-50 text-emerald-600',
-    defect:    'bg-red-50 text-red-600',
-    stock:     'bg-purple-50 text-purple-600',
+  const clientTypeBadge: Record<string, string> = {
+    hotel:   'bg-indigo-100 text-indigo-600',
+    pension: 'bg-teal-100 text-teal-600',
+    resort:  'bg-purple-100 text-purple-600',
+    etc:     'bg-slate-100 text-slate-600'
   };
-
-  const displayStatuses: LaundryItemStatus[] = ['received', 'washing', 'completed', 'defect', 'stock'];
 </script>
 
-<div class="flex h-screen bg-emerald-50 overflow-hidden">
+<svelte:head>
+  <title>세탁물 관리 — Pro Dashboard</title>
+</svelte:head>
 
-  <!-- ══════════════════════════════════════════════════════════
-       왼쪽 사이드바: 거래처 목록
-  ══════════════════════════════════════════════════════════ -->
-  <aside class="w-64 flex flex-col bg-white border-r border-emerald-100 shadow-sm shrink-0">
+<div class="h-screen flex flex-col overflow-hidden bg-slate-50 select-none">
 
-    <!-- 사이드바 헤더 -->
-    <div class="px-5 py-5 border-b border-emerald-100">
-      <div class="flex items-center gap-2">
-        <div class="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
-          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-          </svg>
-        </div>
-        <span class="text-base font-bold text-slate-800">거래처</span>
+  <!-- ── 상단 헤더 ── -->
+  <header class="h-16 bg-white border-b border-slate-200 shadow-sm flex items-center px-5 gap-3 shrink-0 z-10">
+
+    <!-- 로고 -->
+    <div class="flex items-center gap-3 mr-3 shrink-0">
+      <div class="w-10 h-10 bg-indigo-700 rounded-xl flex items-center justify-center shadow-md shrink-0">
+        <span class="text-xl">🏭</span>
       </div>
+      <span class="font-extrabold text-indigo-800 text-lg tracking-tight whitespace-nowrap">세탁물 관리</span>
     </div>
 
-    <!-- 거래처 목록 (스크롤 가능) -->
-    <nav class="flex-1 overflow-y-auto py-3 px-3 space-y-1">
-      {#each store.clients as client (client.id)}
-        <button
-          type="button"
-          class="w-full text-left px-4 py-3 rounded-xl font-medium text-sm transition-all duration-150 active:scale-95
-            {store.selectedClientId === client.id
-              ? 'bg-emerald-500 text-white shadow-md shadow-emerald-200'
-              : 'text-slate-700 hover:bg-emerald-50 hover:text-emerald-700'}"
-          onclick={() => store.selectClient(client.id)}
-        >
-          <div class="font-bold text-base">{client.name}</div>
-          <div class="text-xs mt-0.5 {store.selectedClientId === client.id ? 'text-emerald-100' : 'text-slate-400'}">
-            {client.type === 'hotel' ? '호텔' : client.type === 'pension' ? '펜션' : client.type === 'resort' ? '리조트' : '기타'}
-          </div>
-        </button>
-      {/each}
+    <!-- 탭 네비게이션 -->
+    <nav class="flex items-center gap-3 flex-1">
+      <button
+        class="px-6 py-3 rounded-full text-base font-bold transition-all bg-indigo-600 text-white shadow-sm"
+        onclick={() => goto('/theme-a')}
+      >세탁물관리</button>
+      <button
+        class="px-6 py-3 rounded-full text-base font-bold transition-all text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
+        onclick={() => goto('/theme-a/shipout')}
+      >출고신청</button>
+      <button
+        class="px-6 py-3 rounded-full text-base font-bold transition-all text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
+        onclick={() => goto('/theme-a/defect')}
+      >불량처리</button>
+      <button
+        class="px-6 py-3 rounded-full text-base font-bold transition-all text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
+        onclick={() => goto('/theme-a/history')}
+      >출고현황</button>
     </nav>
 
-    <!-- 홈으로 돌아가기 -->
-    <div class="p-3 border-t border-emerald-100">
-      <button
-        type="button"
-        class="w-full flex items-center justify-center gap-2 h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium text-sm transition-all duration-150 active:scale-95"
-        onclick={() => void goto('/')}
-      >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-        </svg>
-        홈으로
-      </button>
-    </div>
-  </aside>
+    <!-- 홈 버튼 -->
+    <button
+      class="ml-auto px-4 py-2 rounded-full text-sm font-semibold text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all border border-slate-200"
+      onclick={() => goto('/')}
+    >홈으로 /</button>
+  </header>
 
-  <!-- ══════════════════════════════════════════════════════════
-       중앙 메인 콘텐츠
-  ══════════════════════════════════════════════════════════ -->
-  <main class="flex-1 flex flex-col overflow-hidden">
+  <!-- ── 메인 영역 ── -->
+  <div class="flex flex-1 overflow-hidden">
 
-    <!-- 상단: 거래처명 + 탭바 -->
-    <header class="bg-white border-b border-emerald-100 px-6 pt-5 pb-0 shadow-sm shrink-0">
-
-      <!-- 거래처명 -->
-      <div class="flex items-center justify-between mb-4">
-        <div>
-          {#if store.selectedClient}
-            <h1 class="text-2xl font-extrabold text-slate-800">{store.selectedClient.name}</h1>
-            <p class="text-sm text-slate-400 mt-0.5">{store.selectedClient.address}</p>
-          {:else}
-            <h1 class="text-2xl font-extrabold text-slate-400">거래처를 선택하세요</h1>
-          {/if}
-        </div>
-        {#if selectedItemIds.size > 0}
-          <span class="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-sm font-bold">
-            {selectedItemIds.size}개 선택됨
-          </span>
-        {/if}
+    <!-- ── 거래처 사이드바 ── -->
+    <aside class="w-56 bg-white border-r border-slate-200 flex flex-col shrink-0 overflow-hidden">
+      <div class="px-4 py-3 border-b border-slate-100 bg-slate-50">
+        <p class="text-xs font-bold text-indigo-700 tracking-widest uppercase">거래처 목록</p>
       </div>
-
-      <!-- 카테고리 탭 -->
-      <div class="flex gap-1">
-        {#each tabs as tab (tab)}
+      <div class="flex-1 overflow-y-auto">
+        {#each store.clients as client}
+          {@const isSelected = store.selectedClientId === client.id}
+          {@const totalCompleted = store.getTotalCompleted(client.id)}
           <button
-            type="button"
-            class="px-5 py-3 text-sm font-bold rounded-t-xl transition-all duration-150 border-b-2
-              {activeTab === tab
-                ? 'bg-emerald-500 text-white border-emerald-500'
-                : 'text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 border-transparent'}"
-            onclick={() => { activeTab = tab; }}
+            class="w-full min-h-[72px] flex items-center gap-3 px-3 text-left transition-all duration-150
+              {isSelected
+                ? 'bg-indigo-50 border-l-4 border-l-indigo-600'
+                : 'border-l-4 border-l-transparent hover:bg-slate-50'}"
+            onclick={() => selectClient(client.id)}
           >
-            {CATEGORY_LABELS[tab]}
-            {#if store.selectedClientId}
-              <span class="ml-1.5 text-xs opacity-75">
-                ({store.getItemsByCategory(store.selectedClientId, tab).length})
+            <span class="text-2xl shrink-0">{clientIcons[client.type] ?? '🏢'}</span>
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-base text-slate-800 truncate leading-tight">{client.name}</p>
+              <span class="inline-block mt-1 text-xs font-semibold px-2 py-0.5 rounded-full
+                {clientTypeBadge[client.type] ?? 'bg-slate-100 text-slate-600'}">
+                {client.type}
               </span>
-            {/if}
+            </div>
+            <div class="shrink-0 flex flex-col items-end gap-1">
+              <span class="text-sm font-bold text-emerald-600 leading-none">{totalCompleted}</span>
+            </div>
           </button>
         {/each}
       </div>
-    </header>
+    </aside>
 
-    <!-- 카드 그리드 (스크롤 가능) -->
-    <div class="flex-1 overflow-y-auto p-6">
-      {#if !store.selectedClientId}
-        <div class="flex flex-col items-center justify-center h-full text-slate-400">
-          <svg class="w-16 h-16 mb-4 opacity-30" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5"/>
-          </svg>
-          <p class="text-lg font-medium">왼쪽에서 거래처를 선택해 주세요</p>
-        </div>
-      {:else if filteredItems.length === 0}
-        <div class="flex flex-col items-center justify-center h-full text-slate-400">
-          <p class="text-lg font-medium">해당 카테고리 품목이 없습니다</p>
-        </div>
-      {:else}
-        <div class="grid grid-cols-2 xl:grid-cols-3 gap-4">
-          {#each filteredItems as item (item.id)}
-            {@const isSelected = selectedItemIds.has(item.id)}
-            <button
-              type="button"
-              class="text-left bg-white rounded-2xl p-4 transition-all duration-150 border-2 shadow-sm
-                {isSelected
-                  ? 'border-emerald-400 bg-emerald-50 ring-2 ring-emerald-300 ring-offset-1 shadow-md'
-                  : 'border-slate-100 hover:border-emerald-200 hover:shadow-md'}"
-              onclick={() => toggleItem(item.id)}
-            >
-              <!-- 품목명 + 카테고리 뱃지 -->
-              <div class="flex items-start justify-between mb-3">
-                <div>
-                  <p class="text-lg font-bold text-slate-800">{item.name}</p>
-                  <span class="inline-block text-xs px-2 py-0.5 rounded-full mt-1
-                    {item.category === 'towel'
-                      ? 'bg-sky-100 text-sky-600'
-                      : item.category === 'sheet'
-                        ? 'bg-violet-100 text-violet-600'
-                        : 'bg-orange-100 text-orange-600'}">
-                    {CATEGORY_LABELS[item.category]}
-                  </span>
-                </div>
-                {#if isSelected}
-                  <div class="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
-                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                    </svg>
-                  </div>
-                {/if}
-              </div>
+    <!-- ── 카드 그리드 영역 ── -->
+    <main class="flex-1 flex flex-col overflow-hidden">
 
-              <!-- 상태별 수량 -->
-              <div class="grid grid-cols-3 gap-1.5">
-                {#each displayStatuses as status (status)}
-                  <div class="rounded-lg px-2 py-1.5 text-center {statusColors[status] ?? 'bg-slate-50 text-slate-600'}">
-                    <p class="text-xs font-medium opacity-75 leading-tight">{STATUS_LABELS[status]}</p>
-                    <p class="text-xl font-extrabold leading-tight mt-0.5">{item.counts[status]}</p>
-                  </div>
-                {/each}
-              </div>
+      <!-- 카테고리 탭 -->
+      <div class="px-5 pt-4 pb-3 flex items-center gap-3 shrink-0 border-b border-slate-100 bg-white">
+        {#each categoryOrder as cat}
+          <button
+            class="px-6 py-3 rounded-xl text-base font-bold transition-all duration-150
+              {selectedCategory === cat
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200'}"
+            onclick={() => {
+              selectedCategory = cat;
+              selectedItemIds = new SvelteSet();
+              inputValue = '';
+            }}
+          >
+            {CATEGORY_LABELS[cat]}
+          </button>
+        {/each}
 
-              <!-- 마지막 업데이트 -->
-              <p class="text-xs text-slate-300 mt-2.5 text-right">
-                {new Date(item.updatedAt).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-              </p>
-            </button>
-          {/each}
-        </div>
-      {/if}
-    </div>
-  </main>
+        {#if store.selectedClientId}
+          <span class="ml-auto text-sm text-slate-400 font-semibold">{currentItems.length}개 품목</span>
+        {/if}
+      </div>
 
-  <!-- ══════════════════════════════════════════════════════════
-       오른쪽 패널: 키패드 + 액션
-  ══════════════════════════════════════════════════════════ -->
-  <aside class="w-80 flex flex-col bg-white border-l border-emerald-100 shadow-sm shrink-0 overflow-y-auto">
-
-    <div class="px-5 py-5 border-b border-emerald-100 shrink-0">
-      <h2 class="text-base font-bold text-slate-700">입력 패널</h2>
-    </div>
-
-    <div class="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-
-      <!-- 선택된 품목 표시 -->
-      <div>
-        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">선택된 품목</p>
-        {#if selectedItems.length === 0}
-          <div class="rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 text-sm text-slate-400 text-center">
-            카드를 선택해 주세요
+      <!-- 카드 그리드 -->
+      <div class="flex-1 overflow-y-auto px-5 py-5">
+        {#if !store.selectedClientId}
+          <div class="h-full flex flex-col items-center justify-center gap-4 text-slate-400">
+            <span class="text-6xl">👈</span>
+            <p class="text-lg font-bold text-slate-500">거래처를 선택하세요</p>
+            <p class="text-sm text-slate-400">왼쪽 목록에서 거래처를 선택하면 품목이 표시됩니다</p>
+          </div>
+        {:else if currentItems.length === 0}
+          <div class="h-full flex items-center justify-center text-slate-400">
+            <p class="text-base font-semibold">해당 카테고리에 품목이 없습니다</p>
           </div>
         {:else}
-          <div class="rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3 space-y-1 max-h-36 overflow-y-auto">
-            {#each selectedItems as item (item.id)}
-              <div class="flex items-center justify-between text-sm">
-                <span class="font-bold text-slate-700">{item.name}</span>
-                <span class="text-xs text-slate-400">{CATEGORY_LABELS[item.category]}</span>
-              </div>
+          <div class="grid grid-cols-2 gap-4">
+            {#each currentItems as item}
+              {@const isSelected = selectedItemIds.has(item.id)}
+              <button
+                class={cardClass(item)}
+                onclick={() => toggleItemSelection(item)}
+              >
+                <!-- 카드 헤더 -->
+                <div class="flex items-start justify-between gap-2">
+                  <div class="flex flex-col gap-1.5">
+                    <span class="text-xl font-black text-slate-800 leading-tight text-left">{item.name}</span>
+                    <span class="self-start text-xs font-bold px-2.5 py-1 rounded-full {categoryBadgeColors[item.category]}">
+                      {CATEGORY_LABELS[item.category]}
+                    </span>
+                  </div>
+                  {#if isSelected}
+                    <span class="shrink-0 w-7 h-7 bg-indigo-600 text-white rounded-full flex items-center justify-center text-sm font-black shadow">✓</span>
+                  {/if}
+                </div>
+
+                <!-- 수치 3개 -->
+                <div class="flex items-center justify-center gap-2 mt-auto">
+                  <div class="flex flex-col items-center gap-1 flex-1">
+                    <span class="text-4xl font-black text-emerald-500 leading-none">{item.counts.completed}</span>
+                    <span class="text-sm font-bold text-slate-400">세탁완료</span>
+                  </div>
+                  <div class="w-px h-10 bg-slate-150 bg-slate-200 shrink-0"></div>
+                  <div class="flex flex-col items-center gap-1 flex-1">
+                    <span class="text-4xl font-black text-rose-500 leading-none">{item.counts.defect}</span>
+                    <span class="text-sm font-bold text-slate-400">불량</span>
+                  </div>
+                  <div class="w-px h-10 bg-slate-200 shrink-0"></div>
+                  <div class="flex flex-col items-center gap-1 flex-1">
+                    <span class="text-4xl font-black text-slate-500 leading-none">{item.counts.stock}</span>
+                    <span class="text-sm font-bold text-slate-400">재고</span>
+                  </div>
+                </div>
+              </button>
             {/each}
           </div>
         {/if}
       </div>
+    </main>
 
-      <!-- 수정할 상태 선택 -->
-      <div>
-        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">수정할 상태</p>
-        <div class="grid grid-cols-2 gap-2">
-          {#each fieldButtons as btn (btn.key)}
-            <button
-              type="button"
-              class="h-11 rounded-xl text-sm font-bold border transition-all duration-150 active:scale-95
-                {selectedField === btn.key ? selectedFieldColor[btn.key] : btn.color}"
-              onclick={() => { selectedField = btn.key; }}
-            >
-              {btn.label}
-            </button>
-          {/each}
-        </div>
-      </div>
+    <!-- ── 입력 패널 ── -->
+    <aside class="w-80 bg-white border-l border-slate-200 shadow-xl flex flex-col shrink-0 overflow-hidden">
 
-      <!-- 현재 입력값 표시 -->
-      <div>
-        <p class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">입력값</p>
-        <div class="h-14 rounded-xl bg-slate-50 border-2 border-emerald-200 flex items-center px-4">
-          <span class="text-3xl font-extrabold text-slate-800 flex-1 text-right tracking-widest">
-            {inputValue === '' ? '0' : inputValue}
-          </span>
-          <span class="text-sm text-slate-400 ml-2">개</span>
-        </div>
-      </div>
-
-      <!-- 숫자 키패드 -->
-      <div>
-        <NumPad
-          bind:value={inputValue}
-          accentClass="bg-emerald-500 hover:bg-emerald-600 text-white"
-          onconfirm={() => applyInput()}
-        />
-      </div>
-
-      <!-- 입력 적용 버튼 -->
-      <button
-        type="button"
-        class="w-full h-14 rounded-xl font-bold text-base transition-all duration-150 active:scale-95
-          {selectedItems.length > 0 && inputValue !== ''
-            ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-200'
-            : 'bg-slate-100 text-slate-400 cursor-not-allowed'}"
-        onclick={applyInput}
-        disabled={selectedItems.length === 0 || inputValue === ''}
-      >
-        ✓ 입력 적용
-        {#if selectedItems.length > 0 && inputValue !== ''}
-          <span class="text-sm font-normal opacity-80 ml-1">
-            ({selectedItems.length}개 품목 · {STATUS_LABELS[selectedField]} {inputValue}개)
-          </span>
+      <!-- 패널 헤더 -->
+      <div class="h-16 bg-indigo-700 text-white flex items-center px-5 shrink-0">
+        <span class="font-bold text-base tracking-wide">수량 입력</span>
+        {#if selectedItems.length > 0}
+          <span class="ml-auto text-sm bg-white/20 px-3 py-1 rounded-full font-bold">{selectedItems.length}개 선택</span>
         {/if}
-      </button>
-
-      <!-- 세탁완료 일괄 버튼 -->
-      <button
-        type="button"
-        class="w-full h-12 rounded-xl font-bold text-sm transition-all duration-150 active:scale-95
-          {selectedItems.length > 0
-            ? 'bg-teal-500 hover:bg-teal-600 text-white'
-            : 'bg-slate-100 text-slate-400 cursor-not-allowed'}"
-        onclick={bulkComplete}
-        disabled={selectedItems.length === 0}
-      >
-        ⟳ 세탁완료 일괄 처리 (세탁중 → 완료)
-      </button>
-
-      <!-- 구분선 -->
-      <div class="border-t border-slate-100"></div>
-
-      <!-- 네비게이션 버튼 -->
-      <div class="space-y-2 pb-4">
-        <button
-          type="button"
-          class="w-full h-12 rounded-xl font-bold text-sm transition-all duration-150 active:scale-95
-            bg-indigo-500 hover:bg-indigo-600 text-white"
-          onclick={() => void goto('/theme-a/shipout')}
-        >
-          🚚 출고 신청
-        </button>
-        <button
-          type="button"
-          class="w-full h-12 rounded-xl font-bold text-sm transition-all duration-150 active:scale-95
-            bg-slate-600 hover:bg-slate-700 text-white"
-          onclick={() => void goto('/theme-a/history')}
-        >
-          📋 출고 현황
-        </button>
       </div>
 
-    </div>
-  </aside>
+      <div class="flex-1 flex flex-col overflow-hidden px-4 py-4 gap-3">
 
+        <!-- 선택된 품목 목록 -->
+        <div class="max-h-28 overflow-y-auto flex flex-col gap-1.5 shrink-0">
+          {#if selectedItems.length === 0}
+            <p class="text-sm text-slate-400 text-center py-3 font-medium">카드를 클릭해 품목 선택</p>
+          {:else}
+            {#each selectedItems as item}
+              <div class="flex items-center gap-2 bg-indigo-50 rounded-xl px-3 py-2">
+                <span class="text-sm font-bold text-indigo-700 flex-1 truncate">{item.name}</span>
+                <button
+                  class="text-slate-400 hover:text-rose-500 text-sm font-black shrink-0 transition-colors"
+                  onclick={() => selectedItemIds.delete(item.id)}
+                >✕</button>
+              </div>
+            {/each}
+          {/if}
+        </div>
+
+        <!-- 필드 선택 버튼 -->
+        <div class="flex gap-2 shrink-0">
+          <button
+            class="flex-1 h-14 rounded-xl text-sm font-bold transition-all
+              {activeField === 'completed'
+                ? 'bg-emerald-500 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 border border-slate-200'}"
+            onclick={() => { activeField = 'completed'; inputValue = ''; }}
+          >세탁완료</button>
+          <button
+            class="flex-1 h-14 rounded-xl text-sm font-bold transition-all
+              {activeField === 'defect'
+                ? 'bg-rose-500 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-500 hover:bg-rose-50 hover:text-rose-600 border border-slate-200'}"
+            onclick={() => { activeField = 'defect'; inputValue = ''; }}
+          >불량</button>
+        </div>
+
+        <!-- 입력값 표시 박스 -->
+        <div class="h-16 bg-indigo-50 border-2 border-indigo-200 rounded-xl flex items-center justify-center shrink-0">
+          {#if inputValue}
+            <span class="text-2xl font-black text-indigo-700">{inputValue}</span>
+          {:else}
+            <span class="text-sm text-indigo-300 font-semibold">숫자를 입력하세요</span>
+          {/if}
+        </div>
+
+        <!-- 숫자 패드 -->
+        <div class="shrink-0">
+          <NumPad
+            bind:value={inputValue}
+            accentClass="bg-indigo-600 hover:bg-indigo-700 text-white"
+          />
+        </div>
+
+        <!-- 적용 버튼 -->
+        <button
+          class="h-16 rounded-xl font-bold text-base transition-all duration-150 active:scale-[0.98] shrink-0
+            {selectedItems.length > 0 && inputValue
+              ? 'bg-teal-500 hover:bg-teal-600 text-white shadow-md'
+              : 'bg-slate-100 text-slate-300 cursor-not-allowed'}"
+          onclick={applyValue}
+          disabled={selectedItems.length === 0 || !inputValue}
+        >
+          수량 적용
+        </button>
+
+        <!-- 하단 이동 버튼들 -->
+        <div class="flex flex-col gap-2 mt-auto shrink-0">
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              class="py-4 rounded-xl text-sm font-bold bg-indigo-500 hover:bg-indigo-600 text-white transition-all active:scale-[0.98]"
+              onclick={() => goto('/theme-a/shipout')}
+            >📦 출고신청</button>
+            <button
+              class="py-4 rounded-xl text-sm font-bold bg-rose-500 hover:bg-rose-600 text-white transition-all active:scale-[0.98]"
+              onclick={() => goto('/theme-a/defect')}
+            >⚠️ 불량처리</button>
+          </div>
+          <button
+            class="w-full py-4 rounded-xl text-sm font-bold bg-slate-600 hover:bg-slate-700 text-white transition-all active:scale-[0.98]"
+            onclick={() => goto('/theme-a/history')}
+          >📋 출고현황</button>
+        </div>
+
+      </div>
+    </aside>
+
+  </div>
 </div>
