@@ -1,145 +1,181 @@
 // ============================================================
-// 세탁물 관리 앱 - 공통 타입 정의
+// 세탁물 관리 앱 - 공통 타입 정의 (v2)
 // ============================================================
 
-// ------------------------------------------------------------------
-// 거래처 (Client)
-// ------------------------------------------------------------------
-
+// 거래처 타입
 export type ClientType = 'hotel' | 'pension' | 'resort' | 'etc';
 
 export interface Client {
-	id: string;
-	name: string;
-	type: ClientType;
-	address: string;
-	phone?: string;
-	memo?: string;
-	createdAt: string; // ISO 8601
+  id: string;
+  name: string;
+  type: ClientType;
+  address: string;
+  phone?: string;
+  businessNo?: string;      // 사업자번호
+  ownerName?: string;       // 대표자명
+  email?: string;           // 거래처 이메일
+  managerName?: string;     // 담당자명
+  managerPhone?: string;    // 담당자 연락처
+  managerEmail?: string;    // 담당자 이메일
+  memo?: string;
+  createdAt: string;
 }
 
-// ------------------------------------------------------------------
 // 세탁 품목 카테고리
-// ------------------------------------------------------------------
-
 export type LaundryCategory = 'towel' | 'sheet' | 'uniform' | 'all';
 
-// 타올 품목
-export type TowelItemName =
-	| '대타올'
-	| '중타올'
-	| '소타올'
-	| '목욕가운'
-	| '슬리퍼타올';
-
-// 시트 품목
-export type SheetItemName =
-	| '시트S'
-	| '시트D'
-	| '시트Q'
-	| '시트K'
-	| '두베커버S'
-	| '두베커버D'
-	| '두베커버K'
-	| '베개커버';
-
-// 유니폼 품목
-export type UniformItemName =
-	| '상의'
-	| '하의'
-	| '앞치마'
-	| '조끼'
-	| '모자';
-
-export type LaundryItemName = TowelItemName | SheetItemName | UniformItemName;
-
-// ------------------------------------------------------------------
-// 세탁물 상태
-// ------------------------------------------------------------------
-
-export type LaundryItemStatus =
-	| 'received'    // 입고
-	| 'washing'     // 세탁중
-	| 'completed'   // 세탁완료
-	| 'defect'      // 불량
-	| 'stock'       // 재고
-	| 'shipped';    // 출고
+// 세탁물 상태 (defect 제거됨)
+export type LaundryItemStatus = 'received' | 'washing' | 'completed' | 'stock' | 'shipped';
 
 export type LaundryStatusCounts = Record<LaundryItemStatus, number>;
 
-// ------------------------------------------------------------------
-// 세탁 품목 (LaundryItem)
-// ------------------------------------------------------------------
-
+// 세탁 품목
 export interface LaundryItem {
-	id: string;                  // 고유 ID (clientId + itemName 조합)
-	clientId: string;
-	category: Exclude<LaundryCategory, 'all'>;
-	name: LaundryItemName;
-	counts: LaundryStatusCounts;
-	updatedAt: string;           // ISO 8601
+  id: string;
+  clientId: string;
+  category: Exclude<LaundryCategory, 'all'>;
+  name: string;   // 고정 타입 대신 string으로 변경 (동적 추가 가능)
+  counts: LaundryStatusCounts;
+  updatedAt: string;
 }
 
-// ------------------------------------------------------------------
-// 출고(배송) 기록
-// ------------------------------------------------------------------
+// 세탁완료 수정 작업 종류
+export type CompletedActionType = 'add' | 'set';
 
+// 세탁완료 수정 이력 항목 (단일 액션)
+export interface CompletedLogEntry {
+  id: string;
+  laundryItemId: string;
+  clientId: string;
+  itemName: string;
+  category: Exclude<LaundryCategory, 'all'>;
+  actionType: CompletedActionType;  // 'add' = 추가, 'set' = 변경
+  delta: number;          // add면 더한 값, set이면 변경 전 값과의 차이
+  before: number;         // 변경 전 세탁완료 수
+  after: number;          // 변경 후 세탁완료 수
+  createdAt: string;      // ISO 8601 - 기록 시각
+  date: string;           // YYYY-MM-DD - 당일 날짜 (출고 후 삭제 기준)
+}
+
+// 출고(배송) 기록
 export interface ShipmentItem {
-	laundryItemId: string;
-	itemName: LaundryItemName;
-	category: Exclude<LaundryCategory, 'all'>;
-	quantity: number;
+  laundryItemId: string;
+  itemName: string;
+  category: Exclude<LaundryCategory, 'all'>;
+  quantity: number;
 }
 
 export interface Shipment {
-	id: string;
-	clientId: string;
-	items: ShipmentItem[];
-	driverId: string;
-	memo?: string;
-	shippedAt: string;  // ISO 8601
-	createdAt: string;  // ISO 8601
+  id: string;
+  clientId: string;
+  items: ShipmentItem[];
+  driverId: string;
+  memo?: string;
+  shippedAt: string;
+  createdAt: string;
 }
 
-// ------------------------------------------------------------------
-// 배송기사 (Driver)
-// ------------------------------------------------------------------
-
+// 배송기사
 export interface Driver {
-	id: string;
-	name: string;
-	phone: string;
-	memo?: string;
+  id: string;
+  name: string;
+  phone: string;
+  memo?: string;
 }
 
-// ------------------------------------------------------------------
-// 스토어 상태 타입
-// ------------------------------------------------------------------
+// 관리자 사용자
+export interface AdminUser {
+  id: string;
+  username: string;
+  passwordHash: string;   // 실제 앱에서는 bcrypt 등, 여기서는 plain string 시뮬레이션
+  role: 'admin' | 'manager';
+  name: string;
+  email?: string;
+  phone?: string;
+  createdAt: string;
+  lastLoginAt?: string;
+  isActive: boolean;
+}
 
-export type ThemeOption = 'a' | 'b' | 'c';
+// 클라이언트 메모 (거래처에서 보낸 메모)
+export interface ClientMemo {
+  id: string;
+  clientId: string;
+  content: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+// ============================================================
+// 청구서 관련 타입
+// ============================================================
+
+// 거래처별 품목 단가 설정
+export interface ClientItemPrice {
+  clientId: string;
+  category: Exclude<LaundryCategory, 'all'>;
+  itemName: string;
+  unitPrice: number;   // 원/개
+}
+
+// 거래처 계약 정보
+export interface ClientContract {
+  id: string;
+  clientId: string;
+  startDate: string;   // YYYY-MM-DD
+  endDate: string;     // YYYY-MM-DD
+  memo?: string;
+  createdAt: string;
+}
+
+// 청구서 라인 (품목별 집계)
+export interface InvoiceLine {
+  category: Exclude<LaundryCategory, 'all'>;
+  itemName: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;      // quantity * unitPrice
+}
+
+// 청구서
+export interface Invoice {
+  id: string;
+  clientId: string;
+  periodFrom: string;  // YYYY-MM-DD
+  periodTo: string;    // YYYY-MM-DD
+  lines: InvoiceLine[];
+  totalAmount: number;
+  memo?: string;
+  createdAt: string;
+  status: 'draft' | 'issued';
+}
+
+// 스토어 상태 타입
+export type ThemeOption = 'a' | 'b' | 'admin';
 
 export interface StoreState {
-	clients: Client[];
-	laundryItems: LaundryItem[];
-	shipments: Shipment[];
-	drivers: Driver[];
-	selectedClientId: string | null;
-	selectedTheme: ThemeOption;
+  clients: Client[];
+  laundryItems: LaundryItem[];
+  shipments: Shipment[];
+  drivers: Driver[];
+  completedLogs: CompletedLogEntry[];
+  adminUsers: AdminUser[];
+  clientMemos: ClientMemo[];
+  clientItemPrices: ClientItemPrice[];
+  clientContracts: ClientContract[];
+  invoices: Invoice[];
+  selectedClientId: string | null;
+  selectedTheme: ThemeOption;
 }
 
-// ------------------------------------------------------------------
 // 유틸리티 타입
-// ------------------------------------------------------------------
-
-/** 카테고리별 품목 집계 결과 */
 export interface CategorySummary {
-	category: LaundryCategory;
-	items: LaundryItem[];
-	totals: LaundryStatusCounts;
+  category: LaundryCategory;
+  items: LaundryItem[];
+  totals: LaundryStatusCounts;
 }
 
-/** 날짜 범위 */
 export interface DateRange {
-	from: string; // ISO 8601
-	to: string;   // ISO 8601
+  from: string;
+  to: string;
 }

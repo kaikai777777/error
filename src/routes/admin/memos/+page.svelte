@@ -1,0 +1,178 @@
+<script lang="ts">
+  import { store } from '$lib/data/store.svelte';
+  import type { ClientMemo } from '$lib/data/types';
+
+  // ── 필터 상태 ─────────────────────────────────────────────────
+  let statusFilter = $state<'all' | 'unread' | 'read'>('all');
+  let clientFilter = $state<string>('all');
+
+  // ── 필터링된 메모 ─────────────────────────────────────────────
+  const filteredMemos = $derived(
+    store.clientMemos.filter((m) => {
+      const matchStatus =
+        statusFilter === 'all'
+          ? true
+          : statusFilter === 'unread'
+          ? !m.isRead
+          : m.isRead;
+      const matchClient = clientFilter === 'all' || m.clientId === clientFilter;
+      return matchStatus && matchClient;
+    })
+  );
+
+  // ── 전체 읽음 처리 ────────────────────────────────────────────
+  function markAllRead() {
+    store.clientMemos
+      .filter((m) => !m.isRead)
+      .forEach((m) => store.markMemoRead(m.id));
+  }
+
+  // ── 날짜 포맷 ─────────────────────────────────────────────────
+  function formatDate(iso: string): string {
+    const d = new Date(iso);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${yyyy}.${mm}.${dd} ${hh}:${min}`;
+  }
+
+  // ── 거래처 이름 조회 ──────────────────────────────────────────
+  function getClientName(clientId: string): string {
+    return store.getClientById(clientId)?.name ?? '알 수 없음';
+  }
+
+  // ── 삭제 확인 ─────────────────────────────────────────────────
+  function handleDelete(memo: ClientMemo) {
+    if (confirm('이 메모를 삭제하시겠습니까?')) {
+      store.removeClientMemo(memo.id);
+    }
+  }
+</script>
+
+<div class="px-8 py-6 min-h-full bg-slate-50">
+  <!-- ── 상단 헤더 ──────────────────────────────────────────── -->
+  <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center gap-3">
+      <h2 class="text-xl font-extrabold text-slate-800">메모 확인</h2>
+      {#if store.unreadMemoCount > 0}
+        <span
+          class="inline-flex items-center justify-center rounded-full bg-sky-500 px-2.5 py-0.5 text-xs font-bold text-white min-w-[24px]"
+        >
+          {store.unreadMemoCount}
+        </span>
+      {/if}
+    </div>
+
+    <button
+      class="bg-sky-600 hover:bg-sky-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-xl text-sm font-bold transition-colors"
+      disabled={store.unreadMemoCount === 0}
+      onclick={markAllRead}
+    >
+      전체 읽음 처리
+    </button>
+  </div>
+
+  <!-- ── 필터 바 ────────────────────────────────────────────── -->
+  <div class="bg-white rounded-2xl shadow-sm border border-slate-100 px-5 py-4 mb-5 flex flex-wrap items-center gap-4">
+    <!-- 상태 필터 -->
+    <div class="flex items-center gap-1.5">
+      <span class="text-xs font-bold text-slate-500 mr-1">상태</span>
+      {#each ([
+        { value: 'all',    label: '전체'    },
+        { value: 'unread', label: '읽지않음' },
+        { value: 'read',   label: '읽음'    },
+      ] as const) as f (f.value)}
+        <button
+          class="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors
+            {statusFilter === f.value
+              ? 'bg-sky-600 text-white'
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}"
+          onclick={() => (statusFilter = f.value)}
+        >
+          {f.label}
+        </button>
+      {/each}
+    </div>
+
+    <!-- 거래처 필터 -->
+    <div class="flex items-center gap-2 ml-auto">
+      <span class="text-xs font-bold text-slate-500">거래처</span>
+      <select
+        class="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-sky-300 outline-none bg-white"
+        bind:value={clientFilter}
+      >
+        <option value="all">전체</option>
+        {#each store.clients as client (client.id)}
+          <option value={client.id}>{client.name}</option>
+        {/each}
+      </select>
+    </div>
+  </div>
+
+  <!-- ── 메모 카드 그리드 ───────────────────────────────────── -->
+  {#if filteredMemos.length === 0}
+    <div class="flex flex-col items-center justify-center py-24 text-slate-400">
+      <span class="text-5xl mb-4">💬</span>
+      <p class="text-base font-semibold">메모가 없습니다.</p>
+    </div>
+  {:else}
+    <div class="grid grid-cols-2 gap-4">
+      {#each filteredMemos as memo (memo.id)}
+        {@const clientName = getClientName(memo.clientId)}
+        <div
+          class="rounded-2xl border shadow-sm flex flex-col transition-all
+            {memo.isRead
+              ? 'bg-white border-slate-100 opacity-75'
+              : 'bg-sky-50 border-sky-200'}"
+        >
+          <!-- 카드 헤더 -->
+          <div class="flex items-center gap-2 px-5 pt-4 pb-2">
+            <span class="font-bold text-slate-800 text-sm">{clientName}</span>
+            <!-- NEW 뱃지 -->
+            {#if !memo.isRead}
+              <span
+                class="ml-auto inline-flex items-center rounded-full bg-sky-500 px-2 py-0.5 text-[11px] font-extrabold text-white tracking-wide"
+              >
+                NEW
+              </span>
+            {/if}
+          </div>
+
+          <!-- 내용 -->
+          <div class="px-5 py-2 flex-1">
+            <p
+              class="text-sm text-slate-700 leading-relaxed overflow-auto max-h-24 whitespace-pre-wrap break-words"
+            >
+              {memo.content}
+            </p>
+          </div>
+
+          <!-- 카드 푸터 -->
+          <div class="flex items-center gap-2 px-5 pb-4 pt-3 border-t border-slate-100 mt-2">
+            <span class="text-xs text-slate-400 flex-1">{formatDate(memo.createdAt)}</span>
+
+            {#if !memo.isRead}
+              <button
+                class="bg-sky-600 hover:bg-sky-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition-colors"
+                onclick={() => store.markMemoRead(memo.id)}
+              >
+                읽음처리
+              </button>
+            {:else}
+              <span class="text-xs text-slate-400 font-medium px-3 py-1.5">읽음</span>
+            {/if}
+
+            <button
+              class="bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-600 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors"
+              onclick={() => handleDelete(memo)}
+            >
+              삭제
+            </button>
+          </div>
+        </div>
+      {/each}
+    </div>
+  {/if}
+</div>

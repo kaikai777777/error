@@ -15,9 +15,7 @@
       previewBar: 'bg-orange-400',
       previewSub: 'bg-orange-200',
       previewLight: 'bg-orange-100',
-      badge: 'bg-orange-100 text-orange-700',
       dot: 'bg-orange-400',
-      ring: 'ring-orange-200',
       icon: '🌅',
       tag: '대시보드',
       tagColor: 'bg-orange-100 text-orange-700',
@@ -35,9 +33,7 @@
       previewBar: 'bg-sky-500',
       previewSub: 'bg-sky-200',
       previewLight: 'bg-sky-100',
-      badge: 'bg-sky-100 text-sky-700',
       dot: 'bg-sky-400',
-      ring: 'ring-sky-200',
       icon: '🗂️',
       tag: '패널형',
       tagColor: 'bg-sky-100 text-sky-700',
@@ -45,6 +41,7 @@
   ];
 
   let hovered = $state<string | null>(null);
+  let adminHovered = $state(false);
 </script>
 
 <svelte:head>
@@ -65,11 +62,22 @@
         <p class="text-[11px] font-bold tracking-widest text-slate-400 uppercase">Laundry Management System</p>
         <h1 class="text-xl font-extrabold text-slate-800 leading-tight">세탁물 관리 시스템</h1>
       </div>
-      <div class="ml-auto flex items-center gap-2">
+      <div class="ml-auto flex items-center gap-3">
         <span class="flex items-center gap-1.5 text-xs text-slate-400 bg-slate-100 px-3 py-1.5 rounded-full">
           <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
           터치 디스플레이 최적화
         </span>
+        <!-- 관리자 페이지 바로가기 (헤더 우측) -->
+        <button
+          onclick={() => void goto('/admin')}
+          class="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 bg-white border border-slate-200 hover:border-slate-400 hover:bg-slate-50 px-3 py-1.5 rounded-full transition-all duration-200 font-medium"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          관리자
+        </button>
       </div>
     </div>
   </header>
@@ -83,7 +91,7 @@
       <p class="text-slate-500 text-base">두 가지 화면 구성 중 편한 스타일을 고르세요. 기능은 동일합니다.</p>
     </div>
 
-    <!-- 카드 2개 가로 배치 -->
+    <!-- 현장용 테마 카드 2개 -->
     <div class="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-8">
       {#each themes as theme}
         <button
@@ -93,37 +101,33 @@
               : 'border-slate-200 bg-white shadow-md hover:shadow-xl'}"
           onmouseenter={() => hovered = theme.id}
           onmouseleave={() => hovered = null}
-          onclick={() => goto(theme.path)}
+          onclick={() => void goto(theme.path)}
         >
           <!-- UI 미리보기 -->
           <div class="p-5 pb-3">
             <div class="rounded-2xl overflow-hidden h-44 {theme.previewBg} border border-slate-100 flex flex-col gap-1.5 p-2.5">
-              <!-- 상단 바 (헤더 or 내비) -->
               <div class="flex gap-1.5 h-7 shrink-0">
                 <div class="{theme.previewBar} rounded-lg w-8 opacity-80"></div>
                 <div class="flex-1 {theme.previewSub} rounded-lg opacity-70 flex items-center gap-1 px-2">
-                  {#each [0,1,2,3] as _}
+                  {#each [0,1,2,3] as _, i (i)}
                     <div class="flex-1 {theme.previewBar} rounded opacity-50 h-2"></div>
                   {/each}
                 </div>
               </div>
-              <!-- 중앙 영역 -->
               <div class="flex-1 flex gap-1.5">
-                <!-- 사이드 패널 -->
                 <div class="{theme.previewBar} rounded-xl w-14 opacity-40 flex flex-col gap-1 p-1.5">
-                  {#each [0,1,2,3,4] as _}
+                  {#each [0,1,2,3,4] as _, i (i)}
                     <div class="h-1.5 bg-white rounded opacity-70"></div>
                   {/each}
                 </div>
-                <!-- 컨텐츠 -->
                 <div class="flex-1 flex flex-col gap-1.5">
                   <div class="{theme.previewLight} rounded-xl flex-1 p-1.5 grid grid-cols-2 gap-1">
-                    {#each [0,1,2,3,4,5] as i}
+                    {#each [0,1,2,3,4,5] as i (i)}
                       <div class="rounded-lg {i < 2 ? theme.previewSub : 'bg-white'} opacity-80"></div>
                     {/each}
                   </div>
                   <div class="{theme.previewSub} rounded-xl h-8 flex gap-1 p-1.5 items-center">
-                    {#each [0,1] as _}
+                    {#each [0,1] as _, i (i)}
                       <div class="flex-1 {theme.previewBar} rounded-md h-4 opacity-60"></div>
                     {/each}
                   </div>
@@ -134,7 +138,6 @@
 
           <!-- 카드 정보 -->
           <div class="px-5 pb-5">
-            <!-- 태그 + 아이콘 -->
             <div class="flex items-center justify-between mb-3">
               <div class="flex items-center gap-3">
                 <div class="w-12 h-12 rounded-2xl {theme.accent} flex items-center justify-center text-2xl shadow-md">
@@ -150,12 +153,10 @@
               </span>
             </div>
 
-            <!-- 설명 -->
             <p class="text-sm text-slate-500 leading-relaxed mb-4">{theme.description}</p>
 
-            <!-- 특징 -->
             <ul class="grid grid-cols-2 gap-x-2 gap-y-1.5 mb-5">
-              {#each theme.features as f}
+              {#each theme.features as f (f)}
                 <li class="flex items-center gap-1.5 text-sm text-slate-600">
                   <span class="w-1.5 h-1.5 rounded-full {theme.dot} shrink-0"></span>
                   {f}
@@ -163,7 +164,6 @@
               {/each}
             </ul>
 
-            <!-- 버튼 -->
             <div class="w-full py-3.5 rounded-2xl {theme.accent} {theme.accentHover} text-white font-bold text-base text-center
               transition-all duration-200 shadow-md group-hover:shadow-lg group-hover:-translate-y-0.5">
               이 테마로 시작하기 →
@@ -173,9 +173,61 @@
       {/each}
     </div>
 
+    <!-- 관리자 페이지 진입 카드 -->
+    <div class="w-full max-w-4xl mt-6">
+      <button
+        class="w-full group text-left rounded-3xl border-2 transition-all duration-300 overflow-hidden cursor-pointer
+          {adminHovered
+            ? 'border-slate-400 shadow-2xl scale-[1.005] bg-slate-900'
+            : 'border-slate-700 bg-slate-800 shadow-md hover:shadow-xl'}"
+        onmouseenter={() => adminHovered = true}
+        onmouseleave={() => adminHovered = false}
+        onclick={() => void goto('/admin')}
+      >
+        <div class="px-8 py-6 flex items-center gap-6">
+          <!-- 아이콘 -->
+          <div class="w-14 h-14 rounded-2xl bg-slate-700 group-hover:bg-slate-600 flex items-center justify-center shrink-0 transition-colors duration-200 shadow-lg">
+            <svg class="w-8 h-8 text-slate-200" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+          </div>
+
+          <!-- 텍스트 -->
+          <div class="flex-1">
+            <div class="flex items-center gap-3 mb-1">
+              <p class="text-[11px] font-bold tracking-widest text-slate-400 uppercase">Admin Console</p>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">관리자 전용</span>
+            </div>
+            <h3 class="text-lg font-extrabold text-white">관리자 페이지</h3>
+            <p class="text-sm text-slate-400 mt-1">거래처 · 상품 · 사용자 관리 / 입출고 현황 / 통계</p>
+          </div>
+
+          <!-- 특징 목록 -->
+          <div class="hidden md:grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-400 shrink-0">
+            {#each ['거래처 등록·관리', '상품 관리', '사용자 계정 관리', '메모 확인', '입출고 현황', '통계·분석'] as f (f)}
+              <span class="flex items-center gap-1.5">
+                <span class="w-1 h-1 rounded-full bg-slate-500"></span>
+                {f}
+              </span>
+            {/each}
+          </div>
+
+          <!-- 화살표 -->
+          <div class="shrink-0 ml-4">
+            <div class="w-10 h-10 rounded-xl bg-slate-700 group-hover:bg-slate-600 flex items-center justify-center transition-colors duration-200">
+              <svg class="w-5 h-5 text-slate-300 group-hover:translate-x-0.5 transition-transform duration-200" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </button>
+    </div>
+
     <!-- 하단 안내 -->
-    <div class="mt-10 text-center">
-      <p class="text-sm text-slate-400">거래처별 세탁물 재고 관리 · 출고 신청 · 불량 처리 · 출고 현황</p>
+    <div class="mt-8 text-center">
+      <p class="text-sm text-slate-400">거래처별 세탁물 재고 관리 · 출고 처리 · 출고 현황</p>
       <p class="text-xs text-slate-300 mt-1">언제든지 이 페이지로 돌아와 테마를 변경할 수 있습니다.</p>
     </div>
 

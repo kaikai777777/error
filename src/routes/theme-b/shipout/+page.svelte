@@ -45,7 +45,6 @@
     { path: '/',                  icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', label: '홈' },
     { path: '/theme-b',           icon: 'M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4', label: '세탁물' },
     { path: '/theme-b/shipout',   icon: 'M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4', label: '출고' },
-    { path: '/theme-b/defect',    icon: 'M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z', label: '불량' },
     { path: '/theme-b/history',   icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', label: '현황' },
   ];
   const currentPath = '/theme-b/shipout';
@@ -55,6 +54,11 @@
     store.selectedClientId
       ? store.getItemsByCategory(store.selectedClientId, activeCategory)
       : []
+  );
+
+  let isAllSelected = $derived(
+    filteredItems.length > 0 &&
+    filteredItems.every((item) => selectedItemIds.has(item.id))
   );
 
   let selectedEntries = $derived(
@@ -92,6 +96,20 @@
     } else {
       selectedItemIds.add(itemId);
       quantities.set(itemId, completed);
+    }
+  }
+
+  function toggleSelectAll() {
+    if (isAllSelected) {
+      selectedItemIds.clear();
+      quantities.clear();
+      editingItemId = null;
+      numpadValue = '';
+    } else {
+      for (const item of filteredItems) {
+        selectedItemIds.add(item.id);
+        quantities.set(item.id, item.counts.completed);
+      }
     }
   }
 
@@ -152,10 +170,7 @@
     }));
     store.addShipment({ clientId, items: shipItems, driverId: 'system', memo: undefined, shippedAt });
     store.applyShipout(clientId, selectedEntries.map((e) => ({ itemId: e.itemId, quantity: e.quantity })));
-    void goto('/theme-b/history');
   }
-
-  function navTo(path: string) { void goto(path); }
 </script>
 
 <svelte:head><title>출고 신청</title></svelte:head>
@@ -173,7 +188,7 @@
       <button
         class="w-12 h-14 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all duration-150
           {currentPath === nav.path ? 'bg-sky-500 text-white' : 'text-sky-200 hover:bg-white/10'}"
-        onclick={() => navTo(nav.path)}
+        onclick={() => void goto(nav.path)}
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d={nav.icon}/>
@@ -184,17 +199,14 @@
   </nav>
 
   <!-- ── 거래처 패널 ── -->
-  <!-- CLIENT LIST: w-52 → w-60 -->
   <aside class="w-60 bg-white border-r border-sky-100 flex flex-col shrink-0 overflow-hidden">
     <div class="px-3 py-3 border-b border-sky-100 shrink-0">
-      <!-- Header title: text-sm → text-base font-extrabold -->
       <h2 class="text-base font-extrabold text-slate-700 tracking-wide">거래처</h2>
       <p class="text-[10px] text-slate-400 mt-0.5">{store.clients.length}개 등록</p>
     </div>
     <div class="flex-1 overflow-y-auto">
       {#each store.clients as client (client.id)}
         {@const isSel = store.selectedClientId === client.id}
-        <!-- Row: py-3 → py-4 min-h-[68px] -->
         <button
           class="w-full flex items-center gap-2 px-3 py-4 min-h-[68px] transition-all duration-150 border-b border-slate-50
             {isSel ? 'bg-sky-50 border-l-4 border-l-sky-500' : 'hover:bg-slate-50 border-l-4 border-l-transparent'}"
@@ -202,7 +214,6 @@
         >
           <span class="text-2xl shrink-0">{clientTypeIcon[client.type] ?? '🏢'}</span>
           <div class="flex-1 min-w-0 text-left">
-            <!-- Client name: text-sm font-bold → text-base font-bold -->
             <p class="text-base font-bold truncate {isSel ? 'text-sky-700' : 'text-slate-800'}">{client.name}</p>
             <span class="text-[10px] px-1.5 py-0.5 rounded-full font-bold {clientTypeBadge[client.type] ?? 'bg-slate-100 text-slate-600'}">
               {clientTypeLabel[client.type] ?? client.type}
@@ -235,8 +246,8 @@
       {/if}
     </div>
 
-    <!-- 카테고리 탭: text-xs font-semibold py-2 → text-sm font-bold py-3 -->
-    <div class="bg-white border-b border-slate-200 px-4 flex gap-1 shrink-0">
+    <!-- 카테고리 탭 + 전체 선택 버튼 -->
+    <div class="bg-white border-b border-slate-200 px-4 flex items-center gap-1 shrink-0">
       {#each categories as cat (cat.key)}
         <button
           class="px-4 py-3 text-sm font-bold transition-all duration-150
@@ -248,9 +259,20 @@
           {cat.label}
         </button>
       {/each}
+      <div class="ml-auto">
+        {#if store.selectedClientId && filteredItems.length > 0}
+          <button
+            class="px-4 py-2 rounded-lg bg-sky-100 text-sky-700 text-sm font-bold
+              hover:bg-sky-200 transition-all duration-150 active:scale-95"
+            onclick={toggleSelectAll}
+          >
+            {isAllSelected ? '전체 해제' : '전체 선택'}
+          </button>
+        {/if}
+      </div>
     </div>
 
-    <!-- 테이블 헤더: h-10 → h-12, text-xs → text-sm font-bold -->
+    <!-- 테이블 헤더 -->
     {#if store.selectedClientId && filteredItems.length > 0}
       <div class="bg-slate-100 border-b border-slate-200 px-4 shrink-0">
         <div class="flex items-center h-12">
@@ -258,7 +280,6 @@
           <div class="flex-1 min-w-0 pl-2">
             <span class="text-sm font-bold text-slate-500 uppercase tracking-wide">품목명</span>
           </div>
-          <!-- Status column widths: w-32 → w-36 -->
           <div class="w-36 text-center shrink-0">
             <span class="text-sm font-bold text-slate-500">세탁완료</span>
           </div>
@@ -288,7 +309,6 @@
         {#each filteredItems as item (item.id)}
           {@const isSel = selectedItemIds.has(item.id)}
           {@const qty = quantities.get(item.id) ?? item.counts.completed}
-          <!-- 행 전체: min-height 56px → 72px -->
           <div
             role="button"
             tabindex="0"
@@ -310,13 +330,13 @@
               </div>
             </div>
 
-            <!-- 품목명: text-base font-bold → text-lg font-bold -->
+            <!-- 품목명 -->
             <div class="flex-1 min-w-0 pl-2">
               <span class="text-lg font-bold {isSel ? 'text-sky-700' : 'text-slate-800'}">{item.name}</span>
               <p class="text-[10px] text-slate-400 mt-0.5">{CATEGORY_LABELS[item.category]}</p>
             </div>
 
-            <!-- 세탁완료 수량: text-xl font-extrabold → text-2xl font-extrabold text-emerald-600, w-32 → w-36 -->
+            <!-- 세탁완료 수량 -->
             <div class="w-36 flex justify-center shrink-0">
               <span class="text-2xl font-extrabold text-emerald-600">{item.counts.completed}</span>
             </div>
@@ -324,21 +344,18 @@
             <!-- 출고수량 컨트롤 -->
             <div class="w-44 flex items-center justify-center gap-2 shrink-0">
               {#if isSel}
-                <!-- - button: w-10 h-10 → w-12 h-12, text-lg → text-xl font-bold -->
                 <button
                   aria-label="수량 감소"
                   class="w-12 h-12 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xl
                     flex items-center justify-center transition-all duration-150 active:scale-95"
                   onclick={(e) => { e.stopPropagation(); adjustQty(item.id, -1); }}
                 >−</button>
-                <!-- qty display: text-xl font-black → text-2xl font-black -->
                 <button
                   aria-label="수량 직접 입력"
                   class="min-w-12 px-2 h-12 rounded-xl bg-white border-2 border-sky-300 text-sky-700
                     font-black text-2xl text-center transition-all duration-150 hover:bg-sky-50"
                   onclick={(e) => { e.stopPropagation(); openNumpad(item.id); }}
                 >{qty}</button>
-                <!-- + button: w-10 h-10 → w-12 h-12, text-lg → text-xl font-bold -->
                 <button
                   aria-label="수량 증가"
                   class="w-12 h-12 rounded-xl bg-sky-500 hover:bg-sky-600 text-white font-bold text-xl
@@ -356,10 +373,9 @@
   </div>
 
   <!-- ── 출고 확정 패널 ── -->
-  <!-- RIGHT PANEL: w-80 → w-96 -->
   <aside class="w-96 bg-white border-l border-sky-100 flex flex-col shrink-0 overflow-hidden shadow-xl">
 
-    <!-- 패널 헤더: py-4 → py-5, text-base → text-lg font-black -->
+    <!-- 패널 헤더 -->
     <div class="px-5 py-5 bg-sky-700 shrink-0">
       <h2 class="text-lg font-black text-white">출고 신청</h2>
       <p class="text-xs text-sky-200 mt-0.5">
@@ -379,14 +395,11 @@
           <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">선택 품목</p>
           <div class="space-y-1.5">
             {#each selectedEntries as entry (entry.itemId)}
-              <!-- Row height taller with py-3 -->
               <div class="flex items-center justify-between px-3 py-3 rounded-xl bg-sky-50 border border-sky-100">
                 <div class="flex-1 min-w-0">
-                  <!-- item name: text-sm → text-base font-bold -->
                   <p class="text-base font-bold text-slate-700 truncate">{entry.itemName}</p>
                   <p class="text-[10px] text-slate-400">{CATEGORY_LABELS[entry.category as LaundryCategory]}</p>
                 </div>
-                <!-- qty per item: text-base font-extrabold → text-xl font-extrabold -->
                 <span class="text-xl font-extrabold text-sky-700 mx-3">{entry.quantity}</span>
                 <button
                   aria-label="품목 제거"
@@ -400,7 +413,6 @@
               </div>
             {/each}
           </div>
-          <!-- 합계: text-xl font-extrabold → text-2xl font-extrabold -->
           <div class="flex items-center justify-between mt-3 px-3 py-2 bg-sky-100 rounded-xl">
             <span class="text-xs font-bold text-sky-600">총 출고 수량</span>
             <span class="text-2xl font-extrabold text-sky-700">{totalSelectedQty}<span class="text-sm font-bold ml-1">개</span></span>
@@ -408,7 +420,7 @@
         </div>
       {/if}
 
-      <!-- 출고 시간: label text-xs → text-sm font-bold, input h-11 text-base -->
+      <!-- 출고 시간 -->
       <div class="px-4 py-4 border-b border-slate-100 shrink-0">
         <p class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-2">출고 시간</p>
         <input
@@ -429,7 +441,6 @@
             </p>
             <span class="text-[10px] text-slate-400">최대 {editItem?.counts.completed ?? 0}개</span>
           </div>
-          <!-- NumPad display: h-12 → h-14, text-3xl → text-4xl -->
           <div class="h-14 rounded-xl bg-slate-50 border-2 border-sky-300 flex items-center px-4 mb-3">
             <span class="text-4xl font-extrabold text-slate-800 flex-1 text-right tracking-widest">
               {numpadValue === '' ? '0' : numpadValue}
@@ -449,14 +460,13 @@
 
     <!-- 버튼 영역 -->
     <div class="px-4 py-4 border-t border-slate-100 space-y-2 shrink-0">
-      <!-- Confirm button: h-14 text-sm → h-16 text-base font-bold -->
       <button
         class="w-full h-16 rounded-xl font-bold text-base transition-all duration-150 active:scale-[0.98]
           {selectedEntries.length > 0
             ? 'bg-sky-500 hover:bg-sky-600 text-white shadow-md shadow-sky-200'
             : 'bg-slate-100 text-slate-400 cursor-not-allowed'}"
         disabled={selectedEntries.length === 0}
-        onclick={confirmShipout}
+        onclick={() => { confirmShipout(); void goto('/theme-b/history'); }}
       >
         {#if selectedEntries.length > 0}
           출고 확정 ({totalSelectedQty}개)
@@ -464,11 +474,10 @@
           출고 확정
         {/if}
       </button>
-      <!-- Back button: h-12 text-xs → h-14 text-sm font-bold -->
       <button
         class="w-full h-14 rounded-xl font-bold text-sm text-slate-500 hover:bg-slate-100
           transition-all duration-150 border border-slate-200"
-        onclick={() => navTo('/theme-b')}
+        onclick={() => void goto('/theme-b')}
       >
         취소
       </button>

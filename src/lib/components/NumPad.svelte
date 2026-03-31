@@ -31,7 +31,7 @@
 </script>
 
 <div class="grid grid-cols-3 gap-2 select-none">
-  {#each keys as key}
+  {#each keys as key, i (i)}
     {#if key === 'clear'}
       <button
         type="button"
