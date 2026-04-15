@@ -9,6 +9,7 @@ import type {
 	Client,
 	ClientContract,
 	ClientItemPrice,
+	ClientItemPriceRule,
 	ClientMemo,
 	CompletedLogEntry,
 	Driver,
@@ -91,18 +92,20 @@ function zeroCounts(): LaundryStatusCounts {
 // 기본 품목 목록 (동적 추가 베이스)
 // ------------------------------------------------------------------
 
-const DEFAULT_TOWEL_ITEMS: string[] = ['대타올', '중타올', '소타올', '목욕가운', '슬리퍼타올'];
-const DEFAULT_SHEET_ITEMS: string[] = [
-	'시트S',
-	'시트D',
-	'시트Q',
-	'시트K',
-	'두베커버S',
-	'두베커버D',
-	'두베커버K',
-	'베개커버'
+const DEFAULT_TOWEL_ITEMS: string[] = [
+	'대타올', '중타올', '소타올', '목욕가운', '슬리퍼타올',
+	'핸드타올', '페이스타올', '풀타올', '짐타올', '비치타올'
 ];
-const DEFAULT_UNIFORM_ITEMS: string[] = ['상의', '하의', '앞치마', '조끼', '모자'];
+const DEFAULT_SHEET_ITEMS: string[] = [
+	'시트S', '시트D', '시트Q', '시트K',
+	'두베커버S', '두베커버D', '두베커버Q', '두베커버K',
+	'베개커버', '베개커버L',
+	'매트리스커버S', '매트리스커버D', '매트리스커버K'
+];
+const DEFAULT_UNIFORM_ITEMS: string[] = [
+	'상의', '하의', '앞치마', '조끼', '모자',
+	'주방복상의', '주방복하의', '청소복', '객실복', '벨복', '안전조끼'
+];
 
 const DEFAULT_CATEGORY_ITEMS: Record<Exclude<LaundryCategory, 'all'>, string[]> = {
 	towel: DEFAULT_TOWEL_ITEMS,
@@ -178,6 +181,19 @@ const initialClients: Client[] = [
 		managerName: '임담당',
 		managerPhone: '010-5678-9012',
 		createdAt: '2024-04-05T09:00:00.000Z'
+	},
+	{
+		id: 'client-006',
+		name: '테스트호텔',
+		type: 'hotel',
+		address: '서울특별시 마포구 테스트로 111',
+		phone: '02-9999-9999',
+		businessNo: '999-99-99999',
+		ownerName: '테스트대표',
+		managerName: '테스트담당',
+		managerPhone: '010-9999-9999',
+		memo: '복사 기능 테스트용 (빈 상태)',
+		createdAt: '2024-04-10T09:00:00.000Z'
 	}
 ];
 
@@ -190,6 +206,9 @@ function buildLaundryItems(): LaundryItem[] {
 	const now = new Date().toISOString();
 
 	for (const client of initialClients) {
+		// client-006은 테스트용 빈 거래처 (복사 기능 테스트용)
+		if (client.id === 'client-006') continue;
+
 		for (const [cat, names] of Object.entries(DEFAULT_CATEGORY_ITEMS) as [
 			Exclude<LaundryCategory, 'all'>,
 			string[]
@@ -232,26 +251,173 @@ function sampleDate(month: number, day: number, hour = 8, minute = 0): string {
 }
 
 const initialShipments: Shipment[] = [
-	// ── 4월 ──────────────────────────────────────────────
+	// ══════════════════════════════════════════════════════════════
+	// 그랜드호텔 (client-001) — 품목 30종 현실적 샘플 데이터
+	// 날짜마다 품목 수가 8~28종으로 다양하게 구성
+	// ══════════════════════════════════════════════════════════════
+
+	// ── 4월 1일차 (2일): 타올 위주 + 기본 시트 — 12종 ──
 	{
 		id: 'ship-001',
 		clientId: 'client-001',
 		items: [
-			{ laundryItemId: 'client-001__대타올', itemName: '대타올', category: 'towel', quantity: 80 },
-			{ laundryItemId: 'client-001__중타올', itemName: '중타올', category: 'towel', quantity: 60 },
-			{ laundryItemId: 'client-001__시트D',  itemName: '시트D',  category: 'sheet', quantity: 40 },
-			{ laundryItemId: 'client-001__베개커버', itemName: '베개커버', category: 'sheet', quantity: 50 }
+			{ laundryItemId: 'client-001__대타올',   itemName: '대타올',   category: 'towel', quantity: 80 },
+			{ laundryItemId: 'client-001__중타올',   itemName: '중타올',   category: 'towel', quantity: 60 },
+			{ laundryItemId: 'client-001__소타올',   itemName: '소타올',   category: 'towel', quantity: 45 },
+			{ laundryItemId: 'client-001__핸드타올', itemName: '핸드타올', category: 'towel', quantity: 30 },
+			{ laundryItemId: 'client-001__페이스타올', itemName: '페이스타올', category: 'towel', quantity: 25 },
+			{ laundryItemId: 'client-001__목욕가운', itemName: '목욕가운', category: 'towel', quantity: 20 },
+			{ laundryItemId: 'client-001__시트S',    itemName: '시트S',    category: 'sheet', quantity: 30 },
+			{ laundryItemId: 'client-001__시트D',    itemName: '시트D',    category: 'sheet', quantity: 50 },
+			{ laundryItemId: 'client-001__시트K',    itemName: '시트K',    category: 'sheet', quantity: 20 },
+			{ laundryItemId: 'client-001__베개커버', itemName: '베개커버', category: 'sheet', quantity: 80 },
+			{ laundryItemId: 'client-001__두베커버D', itemName: '두베커버D', category: 'sheet', quantity: 40 },
+			{ laundryItemId: 'client-001__두베커버K', itemName: '두베커버K', category: 'sheet', quantity: 18 }
 		],
 		driverId: 'driver-001', memo: '4월 1차 정기 배송',
+		shippedAt: sampleDate(4, 2, 8, 0), createdAt: sampleDate(4, 2, 7, 30)
+	},
+	// ── 4월 2일차 (5일): 풀세트 대규모 — 24종 ──
+	{
+		id: 'ship-001b',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',     itemName: '대타올',     category: 'towel', quantity: 120 },
+			{ laundryItemId: 'client-001__중타올',     itemName: '중타올',     category: 'towel', quantity: 90  },
+			{ laundryItemId: 'client-001__소타올',     itemName: '소타올',     category: 'towel', quantity: 70  },
+			{ laundryItemId: 'client-001__핸드타올',   itemName: '핸드타올',   category: 'towel', quantity: 50  },
+			{ laundryItemId: 'client-001__페이스타올', itemName: '페이스타올', category: 'towel', quantity: 40  },
+			{ laundryItemId: 'client-001__목욕가운',   itemName: '목욕가운',   category: 'towel', quantity: 30  },
+			{ laundryItemId: 'client-001__슬리퍼타올', itemName: '슬리퍼타올', category: 'towel', quantity: 25  },
+			{ laundryItemId: 'client-001__풀타올',     itemName: '풀타올',     category: 'towel', quantity: 15  },
+			{ laundryItemId: 'client-001__시트S',      itemName: '시트S',      category: 'sheet', quantity: 40  },
+			{ laundryItemId: 'client-001__시트D',      itemName: '시트D',      category: 'sheet', quantity: 60  },
+			{ laundryItemId: 'client-001__시트Q',      itemName: '시트Q',      category: 'sheet', quantity: 25  },
+			{ laundryItemId: 'client-001__시트K',      itemName: '시트K',      category: 'sheet', quantity: 30  },
+			{ laundryItemId: 'client-001__두베커버S',  itemName: '두베커버S',  category: 'sheet', quantity: 35  },
+			{ laundryItemId: 'client-001__두베커버D',  itemName: '두베커버D',  category: 'sheet', quantity: 50  },
+			{ laundryItemId: 'client-001__두베커버K',  itemName: '두베커버K',  category: 'sheet', quantity: 28  },
+			{ laundryItemId: 'client-001__베개커버',   itemName: '베개커버',   category: 'sheet', quantity: 100 },
+			{ laundryItemId: 'client-001__베개커버L',  itemName: '베개커버L',  category: 'sheet', quantity: 30  },
+			{ laundryItemId: 'client-001__매트리스커버D', itemName: '매트리스커버D', category: 'sheet', quantity: 12 },
+			{ laundryItemId: 'client-001__상의',       itemName: '상의',       category: 'uniform', quantity: 20 },
+			{ laundryItemId: 'client-001__하의',       itemName: '하의',       category: 'uniform', quantity: 20 },
+			{ laundryItemId: 'client-001__앞치마',     itemName: '앞치마',     category: 'uniform', quantity: 15 },
+			{ laundryItemId: 'client-001__주방복상의', itemName: '주방복상의', category: 'uniform', quantity: 10 },
+			{ laundryItemId: 'client-001__주방복하의', itemName: '주방복하의', category: 'uniform', quantity: 10 },
+			{ laundryItemId: 'client-001__청소복',     itemName: '청소복',     category: 'uniform', quantity: 8  }
+		],
+		driverId: 'driver-001', memo: '4월 대형 배송 (행사)',
 		shippedAt: sampleDate(4, 5, 8, 0), createdAt: sampleDate(4, 5, 7, 30)
+	},
+	// ── 4월 3일차 (9일): 타올+침구 소량 — 8종 ──
+	{
+		id: 'ship-001c',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',   itemName: '대타올',   category: 'towel', quantity: 65 },
+			{ laundryItemId: 'client-001__중타올',   itemName: '중타올',   category: 'towel', quantity: 50 },
+			{ laundryItemId: 'client-001__목욕가운', itemName: '목욕가운', category: 'towel', quantity: 18 },
+			{ laundryItemId: 'client-001__시트D',    itemName: '시트D',    category: 'sheet', quantity: 45 },
+			{ laundryItemId: 'client-001__베개커버', itemName: '베개커버', category: 'sheet', quantity: 70 },
+			{ laundryItemId: 'client-001__두베커버D', itemName: '두베커버D', category: 'sheet', quantity: 38 },
+			{ laundryItemId: 'client-001__상의',     itemName: '상의',     category: 'uniform', quantity: 12 },
+			{ laundryItemId: 'client-001__하의',     itemName: '하의',     category: 'uniform', quantity: 12 }
+		],
+		driverId: 'driver-001', memo: '4월 추가 배송',
+		shippedAt: sampleDate(4, 9, 9, 0), createdAt: sampleDate(4, 9, 8, 30)
+	},
+	// ── 4월 4일차 (14일): 유니폼 중심 + 타올 — 15종 ──
+	{
+		id: 'ship-001d',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',     itemName: '대타올',     category: 'towel', quantity: 75 },
+			{ laundryItemId: 'client-001__소타올',     itemName: '소타올',     category: 'towel', quantity: 40 },
+			{ laundryItemId: 'client-001__핸드타올',   itemName: '핸드타올',   category: 'towel', quantity: 35 },
+			{ laundryItemId: 'client-001__슬리퍼타올', itemName: '슬리퍼타올', category: 'towel', quantity: 20 },
+			{ laundryItemId: 'client-001__시트D',      itemName: '시트D',      category: 'sheet', quantity: 42 },
+			{ laundryItemId: 'client-001__베개커버',   itemName: '베개커버',   category: 'sheet', quantity: 65 },
+			{ laundryItemId: 'client-001__상의',       itemName: '상의',       category: 'uniform', quantity: 25 },
+			{ laundryItemId: 'client-001__하의',       itemName: '하의',       category: 'uniform', quantity: 25 },
+			{ laundryItemId: 'client-001__앞치마',     itemName: '앞치마',     category: 'uniform', quantity: 18 },
+			{ laundryItemId: 'client-001__조끼',       itemName: '조끼',       category: 'uniform', quantity: 15 },
+			{ laundryItemId: 'client-001__모자',       itemName: '모자',       category: 'uniform', quantity: 12 },
+			{ laundryItemId: 'client-001__주방복상의', itemName: '주방복상의', category: 'uniform', quantity: 14 },
+			{ laundryItemId: 'client-001__주방복하의', itemName: '주방복하의', category: 'uniform', quantity: 14 },
+			{ laundryItemId: 'client-001__청소복',     itemName: '청소복',     category: 'uniform', quantity: 10 },
+			{ laundryItemId: 'client-001__객실복',     itemName: '객실복',     category: 'uniform', quantity: 8  }
+		],
+		driverId: 'driver-001', memo: '4월 유니폼 정기',
+		shippedAt: sampleDate(4, 14, 8, 30), createdAt: sampleDate(4, 14, 8, 0)
+	},
+	// ── 4월 5일차 (19일): 침구류 집중 — 11종 ──
+	{
+		id: 'ship-001e',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__시트S',         itemName: '시트S',         category: 'sheet', quantity: 35 },
+			{ laundryItemId: 'client-001__시트D',         itemName: '시트D',         category: 'sheet', quantity: 55 },
+			{ laundryItemId: 'client-001__시트Q',         itemName: '시트Q',         category: 'sheet', quantity: 22 },
+			{ laundryItemId: 'client-001__시트K',         itemName: '시트K',         category: 'sheet', quantity: 28 },
+			{ laundryItemId: 'client-001__두베커버S',     itemName: '두베커버S',     category: 'sheet', quantity: 30 },
+			{ laundryItemId: 'client-001__두베커버D',     itemName: '두베커버D',     category: 'sheet', quantity: 48 },
+			{ laundryItemId: 'client-001__두베커버Q',     itemName: '두베커버Q',     category: 'sheet', quantity: 20 },
+			{ laundryItemId: 'client-001__두베커버K',     itemName: '두베커버K',     category: 'sheet', quantity: 25 },
+			{ laundryItemId: 'client-001__베개커버',      itemName: '베개커버',      category: 'sheet', quantity: 90 },
+			{ laundryItemId: 'client-001__베개커버L',     itemName: '베개커버L',     category: 'sheet', quantity: 25 },
+			{ laundryItemId: 'client-001__매트리스커버S', itemName: '매트리스커버S', category: 'sheet', quantity: 8  }
+		],
+		driverId: 'driver-001', memo: '4월 침구 전체 교체',
+		shippedAt: sampleDate(4, 19, 8, 0), createdAt: sampleDate(4, 19, 7, 30)
+	},
+	// ── 4월 6일차 (24일): 풀세트 — 28종 ──
+	{
+		id: 'ship-001f',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',        itemName: '대타올',        category: 'towel', quantity: 90  },
+			{ laundryItemId: 'client-001__중타올',        itemName: '중타올',        category: 'towel', quantity: 70  },
+			{ laundryItemId: 'client-001__소타올',        itemName: '소타올',        category: 'towel', quantity: 55  },
+			{ laundryItemId: 'client-001__핸드타올',      itemName: '핸드타올',      category: 'towel', quantity: 40  },
+			{ laundryItemId: 'client-001__페이스타올',    itemName: '페이스타올',    category: 'towel', quantity: 35  },
+			{ laundryItemId: 'client-001__목욕가운',      itemName: '목욕가운',      category: 'towel', quantity: 22  },
+			{ laundryItemId: 'client-001__슬리퍼타올',   itemName: '슬리퍼타올',   category: 'towel', quantity: 18  },
+			{ laundryItemId: 'client-001__풀타올',        itemName: '풀타올',        category: 'towel', quantity: 12  },
+			{ laundryItemId: 'client-001__짐타올',        itemName: '짐타올',        category: 'towel', quantity: 10  },
+			{ laundryItemId: 'client-001__시트S',         itemName: '시트S',         category: 'sheet', quantity: 38  },
+			{ laundryItemId: 'client-001__시트D',         itemName: '시트D',         category: 'sheet', quantity: 58  },
+			{ laundryItemId: 'client-001__시트Q',         itemName: '시트Q',         category: 'sheet', quantity: 24  },
+			{ laundryItemId: 'client-001__시트K',         itemName: '시트K',         category: 'sheet', quantity: 32  },
+			{ laundryItemId: 'client-001__두베커버D',     itemName: '두베커버D',     category: 'sheet', quantity: 50  },
+			{ laundryItemId: 'client-001__두베커버K',     itemName: '두베커버K',     category: 'sheet', quantity: 28  },
+			{ laundryItemId: 'client-001__베개커버',      itemName: '베개커버',      category: 'sheet', quantity: 95  },
+			{ laundryItemId: 'client-001__베개커버L',     itemName: '베개커버L',     category: 'sheet', quantity: 28  },
+			{ laundryItemId: 'client-001__매트리스커버D', itemName: '매트리스커버D', category: 'sheet', quantity: 15  },
+			{ laundryItemId: 'client-001__상의',          itemName: '상의',          category: 'uniform', quantity: 22 },
+			{ laundryItemId: 'client-001__하의',          itemName: '하의',          category: 'uniform', quantity: 22 },
+			{ laundryItemId: 'client-001__앞치마',        itemName: '앞치마',        category: 'uniform', quantity: 16 },
+			{ laundryItemId: 'client-001__조끼',          itemName: '조끼',          category: 'uniform', quantity: 14 },
+			{ laundryItemId: 'client-001__모자',          itemName: '모자',          category: 'uniform', quantity: 11 },
+			{ laundryItemId: 'client-001__주방복상의',    itemName: '주방복상의',    category: 'uniform', quantity: 12 },
+			{ laundryItemId: 'client-001__주방복하의',    itemName: '주방복하의',    category: 'uniform', quantity: 12 },
+			{ laundryItemId: 'client-001__청소복',        itemName: '청소복',        category: 'uniform', quantity: 9  },
+			{ laundryItemId: 'client-001__객실복',        itemName: '객실복',        category: 'uniform', quantity: 7  },
+			{ laundryItemId: 'client-001__벨복',          itemName: '벨복',          category: 'uniform', quantity: 5  }
+		],
+		driverId: 'driver-001', memo: '4월 월말 정기 배송',
+		shippedAt: sampleDate(4, 24, 8, 0), createdAt: sampleDate(4, 24, 7, 30)
 	},
 	{
 		id: 'ship-002',
 		clientId: 'client-002',
 		items: [
-			{ laundryItemId: 'client-002__대타올', itemName: '대타올', category: 'towel', quantity: 35 },
-			{ laundryItemId: 'client-002__소타올', itemName: '소타올', category: 'towel', quantity: 30 },
-			{ laundryItemId: 'client-002__시트S',  itemName: '시트S',  category: 'sheet', quantity: 25 }
+			{ laundryItemId: 'client-002__대타올',   itemName: '대타올',   category: 'towel', quantity: 35 },
+			{ laundryItemId: 'client-002__소타올',   itemName: '소타올',   category: 'towel', quantity: 30 },
+			{ laundryItemId: 'client-002__핸드타올', itemName: '핸드타올', category: 'towel', quantity: 20 },
+			{ laundryItemId: 'client-002__시트S',    itemName: '시트S',    category: 'sheet', quantity: 25 },
+			{ laundryItemId: 'client-002__시트D',    itemName: '시트D',    category: 'sheet', quantity: 18 },
+			{ laundryItemId: 'client-002__베개커버', itemName: '베개커버', category: 'sheet', quantity: 30 }
 		],
 		driverId: 'driver-002',
 		shippedAt: sampleDate(4, 7, 10, 0), createdAt: sampleDate(4, 7, 9, 45)
@@ -260,9 +426,12 @@ const initialShipments: Shipment[] = [
 		id: 'ship-003',
 		clientId: 'client-003',
 		items: [
-			{ laundryItemId: 'client-003__상의', itemName: '상의', category: 'uniform', quantity: 30 },
-			{ laundryItemId: 'client-003__하의', itemName: '하의', category: 'uniform', quantity: 30 },
-			{ laundryItemId: 'client-003__앞치마', itemName: '앞치마', category: 'uniform', quantity: 20 }
+			{ laundryItemId: 'client-003__상의',       itemName: '상의',       category: 'uniform', quantity: 30 },
+			{ laundryItemId: 'client-003__하의',       itemName: '하의',       category: 'uniform', quantity: 30 },
+			{ laundryItemId: 'client-003__앞치마',     itemName: '앞치마',     category: 'uniform', quantity: 20 },
+			{ laundryItemId: 'client-003__주방복상의', itemName: '주방복상의', category: 'uniform', quantity: 12 },
+			{ laundryItemId: 'client-003__주방복하의', itemName: '주방복하의', category: 'uniform', quantity: 12 },
+			{ laundryItemId: 'client-003__청소복',     itemName: '청소복',     category: 'uniform', quantity: 8  }
 		],
 		driverId: 'driver-003', memo: '유니폼 정기',
 		shippedAt: sampleDate(4, 10, 14, 0), createdAt: sampleDate(4, 10, 13, 30)
@@ -289,38 +458,42 @@ const initialShipments: Shipment[] = [
 		driverId: 'driver-002',
 		shippedAt: sampleDate(4, 15, 11, 0), createdAt: sampleDate(4, 15, 10, 30)
 	},
-	{
-		id: 'ship-006',
-		clientId: 'client-001',
-		items: [
-			{ laundryItemId: 'client-001__대타올',   itemName: '대타올',   category: 'towel', quantity: 75 },
-			{ laundryItemId: 'client-001__목욕가운',  itemName: '목욕가운',  category: 'towel', quantity: 20 },
-			{ laundryItemId: 'client-001__시트D',    itemName: '시트D',    category: 'sheet', quantity: 35 },
-			{ laundryItemId: 'client-001__두베커버D', itemName: '두베커버D', category: 'sheet', quantity: 25 }
-		],
-		driverId: 'driver-001', memo: '4월 2차',
-		shippedAt: sampleDate(4, 22, 8, 0), createdAt: sampleDate(4, 22, 7, 30)
-	},
+
 	{
 		id: 'ship-007',
 		clientId: 'client-003',
 		items: [
-			{ laundryItemId: 'client-003__대타올', itemName: '대타올', category: 'towel', quantity: 55 },
-			{ laundryItemId: 'client-003__시트D',  itemName: '시트D',  category: 'sheet', quantity: 45 },
+			{ laundryItemId: 'client-003__대타올',   itemName: '대타올',   category: 'towel', quantity: 55 },
+			{ laundryItemId: 'client-003__핸드타올', itemName: '핸드타올', category: 'towel', quantity: 25 },
+			{ laundryItemId: 'client-003__시트D',    itemName: '시트D',    category: 'sheet', quantity: 45 },
+			{ laundryItemId: 'client-003__두베커버D', itemName: '두베커버D', category: 'sheet', quantity: 30 },
 			{ laundryItemId: 'client-003__베개커버', itemName: '베개커버', category: 'sheet', quantity: 40 }
 		],
 		driverId: 'driver-003',
 		shippedAt: sampleDate(4, 25, 14, 0), createdAt: sampleDate(4, 25, 13, 30)
 	},
 	// ── 5월 ──────────────────────────────────────────────
+	// 5월 1일차 (3일): 타올+침구 중간 규모 — 16종
 	{
 		id: 'ship-008',
 		clientId: 'client-001',
 		items: [
-			{ laundryItemId: 'client-001__대타올',  itemName: '대타올',  category: 'towel', quantity: 90 },
-			{ laundryItemId: 'client-001__중타올',  itemName: '중타올',  category: 'towel', quantity: 70 },
-			{ laundryItemId: 'client-001__시트D',   itemName: '시트D',   category: 'sheet', quantity: 50 },
-			{ laundryItemId: 'client-001__베개커버', itemName: '베개커버', category: 'sheet', quantity: 60 }
+			{ laundryItemId: 'client-001__대타올',     itemName: '대타올',     category: 'towel', quantity: 90  },
+			{ laundryItemId: 'client-001__중타올',     itemName: '중타올',     category: 'towel', quantity: 70  },
+			{ laundryItemId: 'client-001__소타올',     itemName: '소타올',     category: 'towel', quantity: 50  },
+			{ laundryItemId: 'client-001__핸드타올',   itemName: '핸드타올',   category: 'towel', quantity: 40  },
+			{ laundryItemId: 'client-001__페이스타올', itemName: '페이스타올', category: 'towel', quantity: 30  },
+			{ laundryItemId: 'client-001__목욕가운',   itemName: '목욕가운',   category: 'towel', quantity: 25  },
+			{ laundryItemId: 'client-001__시트S',      itemName: '시트S',      category: 'sheet', quantity: 32  },
+			{ laundryItemId: 'client-001__시트D',      itemName: '시트D',      category: 'sheet', quantity: 55  },
+			{ laundryItemId: 'client-001__시트K',      itemName: '시트K',      category: 'sheet', quantity: 24  },
+			{ laundryItemId: 'client-001__두베커버D',  itemName: '두베커버D',  category: 'sheet', quantity: 45  },
+			{ laundryItemId: 'client-001__두베커버K',  itemName: '두베커버K',  category: 'sheet', quantity: 20  },
+			{ laundryItemId: 'client-001__베개커버',   itemName: '베개커버',   category: 'sheet', quantity: 80  },
+			{ laundryItemId: 'client-001__베개커버L',  itemName: '베개커버L',  category: 'sheet', quantity: 22  },
+			{ laundryItemId: 'client-001__상의',       itemName: '상의',       category: 'uniform', quantity: 18 },
+			{ laundryItemId: 'client-001__하의',       itemName: '하의',       category: 'uniform', quantity: 18 },
+			{ laundryItemId: 'client-001__앞치마',     itemName: '앞치마',     category: 'uniform', quantity: 13 }
 		],
 		driverId: 'driver-001', memo: '5월 1차 정기',
 		shippedAt: sampleDate(5, 3, 8, 0), createdAt: sampleDate(5, 3, 7, 30)
@@ -349,13 +522,33 @@ const initialShipments: Shipment[] = [
 		driverId: 'driver-001', memo: '스카이호텔 5월 1차',
 		shippedAt: sampleDate(5, 8, 9, 0), createdAt: sampleDate(5, 8, 8, 30)
 	},
+	// 5월 중간 (10일): 타올+유니폼 소량 — 9종
+	{
+		id: 'ship-010b',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',     itemName: '대타올',     category: 'towel', quantity: 60 },
+			{ laundryItemId: 'client-001__중타올',     itemName: '중타올',     category: 'towel', quantity: 45 },
+			{ laundryItemId: 'client-001__슬리퍼타올', itemName: '슬리퍼타올', category: 'towel', quantity: 22 },
+			{ laundryItemId: 'client-001__조끼',       itemName: '조끼',       category: 'uniform', quantity: 14 },
+			{ laundryItemId: 'client-001__모자',       itemName: '모자',       category: 'uniform', quantity: 12 },
+			{ laundryItemId: 'client-001__벨복',       itemName: '벨복',       category: 'uniform', quantity: 6  },
+			{ laundryItemId: 'client-001__안전조끼',   itemName: '안전조끼',   category: 'uniform', quantity: 8  },
+			{ laundryItemId: 'client-001__객실복',     itemName: '객실복',     category: 'uniform', quantity: 10 },
+			{ laundryItemId: 'client-001__청소복',     itemName: '청소복',     category: 'uniform', quantity: 9  }
+		],
+		driverId: 'driver-001', memo: '5월 유니폼 추가',
+		shippedAt: sampleDate(5, 10, 10, 0), createdAt: sampleDate(5, 10, 9, 30)
+	},
 	{
 		id: 'ship-011',
 		clientId: 'client-003',
 		items: [
-			{ laundryItemId: 'client-003__상의',  itemName: '상의',  category: 'uniform', quantity: 35 },
-			{ laundryItemId: 'client-003__하의',  itemName: '하의',  category: 'uniform', quantity: 35 },
-			{ laundryItemId: 'client-003__앞치마', itemName: '앞치마', category: 'uniform', quantity: 25 }
+			{ laundryItemId: 'client-003__상의',       itemName: '상의',       category: 'uniform', quantity: 35 },
+			{ laundryItemId: 'client-003__하의',       itemName: '하의',       category: 'uniform', quantity: 35 },
+			{ laundryItemId: 'client-003__앞치마',     itemName: '앞치마',     category: 'uniform', quantity: 25 },
+			{ laundryItemId: 'client-003__주방복상의', itemName: '주방복상의', category: 'uniform', quantity: 14 },
+			{ laundryItemId: 'client-003__청소복',     itemName: '청소복',     category: 'uniform', quantity: 9  }
 		],
 		driverId: 'driver-003', memo: '유니폼 5월',
 		shippedAt: sampleDate(5, 12, 14, 0), createdAt: sampleDate(5, 12, 13, 30)
@@ -371,16 +564,33 @@ const initialShipments: Shipment[] = [
 		driverId: 'driver-002',
 		shippedAt: sampleDate(5, 14, 11, 0), createdAt: sampleDate(5, 14, 10, 30)
 	},
+	// 5월 2차 (20일): 침구 집중 + 타올 — 20종
 	{
 		id: 'ship-013',
 		clientId: 'client-001',
 		items: [
-			{ laundryItemId: 'client-001__대타올',   itemName: '대타올',   category: 'towel', quantity: 85 },
-			{ laundryItemId: 'client-001__소타올',   itemName: '소타올',   category: 'towel', quantity: 40 },
-			{ laundryItemId: 'client-001__시트D',    itemName: '시트D',    category: 'sheet', quantity: 45 },
-			{ laundryItemId: 'client-001__두베커버D', itemName: '두베커버D', category: 'sheet', quantity: 30 }
+			{ laundryItemId: 'client-001__대타올',        itemName: '대타올',        category: 'towel', quantity: 85  },
+			{ laundryItemId: 'client-001__중타올',        itemName: '중타올',        category: 'towel', quantity: 65  },
+			{ laundryItemId: 'client-001__소타올',        itemName: '소타올',        category: 'towel', quantity: 50  },
+			{ laundryItemId: 'client-001__핸드타올',      itemName: '핸드타올',      category: 'towel', quantity: 38  },
+			{ laundryItemId: 'client-001__풀타올',        itemName: '풀타올',        category: 'towel', quantity: 14  },
+			{ laundryItemId: 'client-001__비치타올',      itemName: '비치타올',      category: 'towel', quantity: 20  },
+			{ laundryItemId: 'client-001__시트S',         itemName: '시트S',         category: 'sheet', quantity: 36  },
+			{ laundryItemId: 'client-001__시트D',         itemName: '시트D',         category: 'sheet', quantity: 58  },
+			{ laundryItemId: 'client-001__시트Q',         itemName: '시트Q',         category: 'sheet', quantity: 20  },
+			{ laundryItemId: 'client-001__시트K',         itemName: '시트K',         category: 'sheet', quantity: 26  },
+			{ laundryItemId: 'client-001__두베커버S',     itemName: '두베커버S',     category: 'sheet', quantity: 32  },
+			{ laundryItemId: 'client-001__두베커버D',     itemName: '두베커버D',     category: 'sheet', quantity: 50  },
+			{ laundryItemId: 'client-001__두베커버Q',     itemName: '두베커버Q',     category: 'sheet', quantity: 18  },
+			{ laundryItemId: 'client-001__두베커버K',     itemName: '두베커버K',     category: 'sheet', quantity: 24  },
+			{ laundryItemId: 'client-001__베개커버',      itemName: '베개커버',      category: 'sheet', quantity: 88  },
+			{ laundryItemId: 'client-001__베개커버L',     itemName: '베개커버L',     category: 'sheet', quantity: 26  },
+			{ laundryItemId: 'client-001__매트리스커버S', itemName: '매트리스커버S', category: 'sheet', quantity: 10  },
+			{ laundryItemId: 'client-001__매트리스커버D', itemName: '매트리스커버D', category: 'sheet', quantity: 14  },
+			{ laundryItemId: 'client-001__매트리스커버K', itemName: '매트리스커버K', category: 'sheet', quantity: 8   },
+			{ laundryItemId: 'client-001__상의',          itemName: '상의',          category: 'uniform', quantity: 20 }
 		],
-		driverId: 'driver-001', memo: '5월 2차',
+		driverId: 'driver-001', memo: '5월 2차 정기',
 		shippedAt: sampleDate(5, 20, 8, 0), createdAt: sampleDate(5, 20, 7, 30)
 	},
 	{
@@ -397,12 +607,34 @@ const initialShipments: Shipment[] = [
 		id: 'ship-015',
 		clientId: 'client-004',
 		items: [
-			{ laundryItemId: 'client-004__대타올',   itemName: '대타올',   category: 'towel', quantity: 105 },
+			{ laundryItemId: 'client-004__대타올',    itemName: '대타올',    category: 'towel', quantity: 105 },
 			{ laundryItemId: 'client-004__슬리퍼타올', itemName: '슬리퍼타올', category: 'towel', quantity: 50 },
-			{ laundryItemId: 'client-004__시트K',    itemName: '시트K',    category: 'sheet', quantity: 60 }
+			{ laundryItemId: 'client-004__시트K',     itemName: '시트K',     category: 'sheet', quantity: 60 },
+			{ laundryItemId: 'client-004__두베커버K',  itemName: '두베커버K',  category: 'sheet', quantity: 32 },
+			{ laundryItemId: 'client-004__베개커버',   itemName: '베개커버',   category: 'sheet', quantity: 55 }
 		],
 		driverId: 'driver-001', memo: '스카이호텔 5월 2차',
 		shippedAt: sampleDate(5, 26, 9, 0), createdAt: sampleDate(5, 26, 8, 30)
+	},
+	// 5월 말일 (29일): client-001 유니폼 전체 — 11종
+	{
+		id: 'ship-015b',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__상의',       itemName: '상의',       category: 'uniform', quantity: 24 },
+			{ laundryItemId: 'client-001__하의',       itemName: '하의',       category: 'uniform', quantity: 24 },
+			{ laundryItemId: 'client-001__앞치마',     itemName: '앞치마',     category: 'uniform', quantity: 18 },
+			{ laundryItemId: 'client-001__조끼',       itemName: '조끼',       category: 'uniform', quantity: 16 },
+			{ laundryItemId: 'client-001__모자',       itemName: '모자',       category: 'uniform', quantity: 14 },
+			{ laundryItemId: 'client-001__주방복상의', itemName: '주방복상의', category: 'uniform', quantity: 13 },
+			{ laundryItemId: 'client-001__주방복하의', itemName: '주방복하의', category: 'uniform', quantity: 13 },
+			{ laundryItemId: 'client-001__청소복',     itemName: '청소복',     category: 'uniform', quantity: 11 },
+			{ laundryItemId: 'client-001__객실복',     itemName: '객실복',     category: 'uniform', quantity: 9  },
+			{ laundryItemId: 'client-001__벨복',       itemName: '벨복',       category: 'uniform', quantity: 6  },
+			{ laundryItemId: 'client-001__안전조끼',   itemName: '안전조끼',   category: 'uniform', quantity: 10 }
+		],
+		driverId: 'driver-001', memo: '5월 유니폼 정기',
+		shippedAt: sampleDate(5, 29, 9, 0), createdAt: sampleDate(5, 29, 8, 30)
 	},
 	{
 		id: 'ship-016',
@@ -416,14 +648,30 @@ const initialShipments: Shipment[] = [
 		shippedAt: sampleDate(5, 28, 14, 0), createdAt: sampleDate(5, 28, 13, 30)
 	},
 	// ── 6월 ──────────────────────────────────────────────
+	// ── 6월 ──────────────────────────────────────────────
+	// 6월 1일차 (3일): 타올+침구 — 18종
 	{
 		id: 'ship-017',
 		clientId: 'client-001',
 		items: [
-			{ laundryItemId: 'client-001__대타올',  itemName: '대타올',  category: 'towel', quantity: 95 },
-			{ laundryItemId: 'client-001__중타올',  itemName: '중타올',  category: 'towel', quantity: 75 },
-			{ laundryItemId: 'client-001__시트D',   itemName: '시트D',   category: 'sheet', quantity: 55 },
-			{ laundryItemId: 'client-001__베개커버', itemName: '베개커버', category: 'sheet', quantity: 65 }
+			{ laundryItemId: 'client-001__대타올',     itemName: '대타올',     category: 'towel', quantity: 95  },
+			{ laundryItemId: 'client-001__중타올',     itemName: '중타올',     category: 'towel', quantity: 75  },
+			{ laundryItemId: 'client-001__소타올',     itemName: '소타올',     category: 'towel', quantity: 55  },
+			{ laundryItemId: 'client-001__핸드타올',   itemName: '핸드타올',   category: 'towel', quantity: 42  },
+			{ laundryItemId: 'client-001__페이스타올', itemName: '페이스타올', category: 'towel', quantity: 38  },
+			{ laundryItemId: 'client-001__목욕가운',   itemName: '목욕가운',   category: 'towel', quantity: 28  },
+			{ laundryItemId: 'client-001__슬리퍼타올', itemName: '슬리퍼타올', category: 'towel', quantity: 24  },
+			{ laundryItemId: 'client-001__비치타올',   itemName: '비치타올',   category: 'towel', quantity: 30  },
+			{ laundryItemId: 'client-001__시트D',      itemName: '시트D',      category: 'sheet', quantity: 62  },
+			{ laundryItemId: 'client-001__시트K',      itemName: '시트K',      category: 'sheet', quantity: 30  },
+			{ laundryItemId: 'client-001__두베커버D',  itemName: '두베커버D',  category: 'sheet', quantity: 52  },
+			{ laundryItemId: 'client-001__두베커버K',  itemName: '두베커버K',  category: 'sheet', quantity: 28  },
+			{ laundryItemId: 'client-001__베개커버',   itemName: '베개커버',   category: 'sheet', quantity: 95  },
+			{ laundryItemId: 'client-001__베개커버L',  itemName: '베개커버L',  category: 'sheet', quantity: 30  },
+			{ laundryItemId: 'client-001__상의',       itemName: '상의',       category: 'uniform', quantity: 22 },
+			{ laundryItemId: 'client-001__하의',       itemName: '하의',       category: 'uniform', quantity: 22 },
+			{ laundryItemId: 'client-001__주방복상의', itemName: '주방복상의', category: 'uniform', quantity: 15 },
+			{ laundryItemId: 'client-001__주방복하의', itemName: '주방복하의', category: 'uniform', quantity: 15 }
 		],
 		driverId: 'driver-001', memo: '6월 1차',
 		shippedAt: sampleDate(6, 3, 8, 0), createdAt: sampleDate(6, 3, 7, 30)
@@ -473,16 +721,58 @@ const initialShipments: Shipment[] = [
 		driverId: 'driver-002',
 		shippedAt: sampleDate(6, 11, 11, 0), createdAt: sampleDate(6, 11, 10, 30)
 	},
+	// 6월 중간 (12일): 소량 타올+유니폼 — 10종
+	{
+		id: 'ship-021b',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',   itemName: '대타올',   category: 'towel', quantity: 50 },
+			{ laundryItemId: 'client-001__풀타올',   itemName: '풀타올',   category: 'towel', quantity: 18 },
+			{ laundryItemId: 'client-001__짐타올',   itemName: '짐타올',   category: 'towel', quantity: 15 },
+			{ laundryItemId: 'client-001__청소복',   itemName: '청소복',   category: 'uniform', quantity: 12 },
+			{ laundryItemId: 'client-001__객실복',   itemName: '객실복',   category: 'uniform', quantity: 10 },
+			{ laundryItemId: 'client-001__벨복',     itemName: '벨복',     category: 'uniform', quantity: 7  },
+			{ laundryItemId: 'client-001__안전조끼', itemName: '안전조끼', category: 'uniform', quantity: 9  },
+			{ laundryItemId: 'client-001__조끼',     itemName: '조끼',     category: 'uniform', quantity: 14 },
+			{ laundryItemId: 'client-001__모자',     itemName: '모자',     category: 'uniform', quantity: 13 },
+			{ laundryItemId: 'client-001__앞치마',   itemName: '앞치마',   category: 'uniform', quantity: 18 }
+		],
+		driverId: 'driver-001', memo: '6월 소량 추가',
+		shippedAt: sampleDate(6, 12, 10, 0), createdAt: sampleDate(6, 12, 9, 30)
+	},
+	// 6월 2차 (18일): 전품목 대규모 — 26종
 	{
 		id: 'ship-022',
 		clientId: 'client-001',
 		items: [
-			{ laundryItemId: 'client-001__대타올',   itemName: '대타올',   category: 'towel', quantity: 88 },
-			{ laundryItemId: 'client-001__소타올',   itemName: '소타올',   category: 'towel', quantity: 45 },
-			{ laundryItemId: 'client-001__시트D',    itemName: '시트D',    category: 'sheet', quantity: 48 },
-			{ laundryItemId: 'client-001__두베커버D', itemName: '두베커버D', category: 'sheet', quantity: 32 }
+			{ laundryItemId: 'client-001__대타올',        itemName: '대타올',        category: 'towel', quantity: 100 },
+			{ laundryItemId: 'client-001__중타올',        itemName: '중타올',        category: 'towel', quantity: 80  },
+			{ laundryItemId: 'client-001__소타올',        itemName: '소타올',        category: 'towel', quantity: 60  },
+			{ laundryItemId: 'client-001__핸드타올',      itemName: '핸드타올',      category: 'towel', quantity: 48  },
+			{ laundryItemId: 'client-001__페이스타올',    itemName: '페이스타올',    category: 'towel', quantity: 40  },
+			{ laundryItemId: 'client-001__목욕가운',      itemName: '목욕가운',      category: 'towel', quantity: 30  },
+			{ laundryItemId: 'client-001__슬리퍼타올',   itemName: '슬리퍼타올',   category: 'towel', quantity: 28  },
+			{ laundryItemId: 'client-001__비치타올',      itemName: '비치타올',      category: 'towel', quantity: 35  },
+			{ laundryItemId: 'client-001__시트S',         itemName: '시트S',         category: 'sheet', quantity: 40  },
+			{ laundryItemId: 'client-001__시트D',         itemName: '시트D',         category: 'sheet', quantity: 65  },
+			{ laundryItemId: 'client-001__시트Q',         itemName: '시트Q',         category: 'sheet', quantity: 28  },
+			{ laundryItemId: 'client-001__시트K',         itemName: '시트K',         category: 'sheet', quantity: 35  },
+			{ laundryItemId: 'client-001__두베커버D',     itemName: '두베커버D',     category: 'sheet', quantity: 58  },
+			{ laundryItemId: 'client-001__두베커버K',     itemName: '두베커버K',     category: 'sheet', quantity: 32  },
+			{ laundryItemId: 'client-001__베개커버',      itemName: '베개커버',      category: 'sheet', quantity: 105 },
+			{ laundryItemId: 'client-001__베개커버L',     itemName: '베개커버L',     category: 'sheet', quantity: 35  },
+			{ laundryItemId: 'client-001__매트리스커버D', itemName: '매트리스커버D', category: 'sheet', quantity: 16  },
+			{ laundryItemId: 'client-001__상의',          itemName: '상의',          category: 'uniform', quantity: 24 },
+			{ laundryItemId: 'client-001__하의',          itemName: '하의',          category: 'uniform', quantity: 24 },
+			{ laundryItemId: 'client-001__앞치마',        itemName: '앞치마',        category: 'uniform', quantity: 18 },
+			{ laundryItemId: 'client-001__조끼',          itemName: '조끼',          category: 'uniform', quantity: 16 },
+			{ laundryItemId: 'client-001__모자',          itemName: '모자',          category: 'uniform', quantity: 14 },
+			{ laundryItemId: 'client-001__주방복상의',    itemName: '주방복상의',    category: 'uniform', quantity: 16 },
+			{ laundryItemId: 'client-001__주방복하의',    itemName: '주방복하의',    category: 'uniform', quantity: 16 },
+			{ laundryItemId: 'client-001__청소복',        itemName: '청소복',        category: 'uniform', quantity: 12 },
+			{ laundryItemId: 'client-001__객실복',        itemName: '객실복',        category: 'uniform', quantity: 10 }
 		],
-		driverId: 'driver-001', memo: '6월 2차',
+		driverId: 'driver-001', memo: '6월 2차 정기',
 		shippedAt: sampleDate(6, 18, 8, 0), createdAt: sampleDate(6, 18, 7, 30)
 	},
 	{
@@ -500,12 +790,36 @@ const initialShipments: Shipment[] = [
 		id: 'ship-024',
 		clientId: 'client-004',
 		items: [
-			{ laundryItemId: 'client-004__대타올',   itemName: '대타올',   category: 'towel', quantity: 108 },
+			{ laundryItemId: 'client-004__대타올',    itemName: '대타올',    category: 'towel', quantity: 108 },
 			{ laundryItemId: 'client-004__슬리퍼타올', itemName: '슬리퍼타올', category: 'towel', quantity: 52 },
-			{ laundryItemId: 'client-004__시트K',    itemName: '시트K',    category: 'sheet', quantity: 62 }
+			{ laundryItemId: 'client-004__시트K',     itemName: '시트K',     category: 'sheet', quantity: 62 },
+			{ laundryItemId: 'client-004__두베커버K',  itemName: '두베커버K',  category: 'sheet', quantity: 35 },
+			{ laundryItemId: 'client-004__베개커버',   itemName: '베개커버',   category: 'sheet', quantity: 60 }
 		],
 		driverId: 'driver-001', memo: '스카이호텔 6월 2차',
 		shippedAt: sampleDate(6, 24, 9, 0), createdAt: sampleDate(6, 24, 8, 30)
+	},
+	// 6월 말 (27일): client-001 침구 교체 — 13종
+	{
+		id: 'ship-024b',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__시트S',         itemName: '시트S',         category: 'sheet', quantity: 42  },
+			{ laundryItemId: 'client-001__시트D',         itemName: '시트D',         category: 'sheet', quantity: 68  },
+			{ laundryItemId: 'client-001__시트Q',         itemName: '시트Q',         category: 'sheet', quantity: 30  },
+			{ laundryItemId: 'client-001__시트K',         itemName: '시트K',         category: 'sheet', quantity: 38  },
+			{ laundryItemId: 'client-001__두베커버S',     itemName: '두베커버S',     category: 'sheet', quantity: 36  },
+			{ laundryItemId: 'client-001__두베커버D',     itemName: '두베커버D',     category: 'sheet', quantity: 60  },
+			{ laundryItemId: 'client-001__두베커버Q',     itemName: '두베커버Q',     category: 'sheet', quantity: 26  },
+			{ laundryItemId: 'client-001__두베커버K',     itemName: '두베커버K',     category: 'sheet', quantity: 34  },
+			{ laundryItemId: 'client-001__베개커버',      itemName: '베개커버',      category: 'sheet', quantity: 110 },
+			{ laundryItemId: 'client-001__베개커버L',     itemName: '베개커버L',     category: 'sheet', quantity: 38  },
+			{ laundryItemId: 'client-001__매트리스커버S', itemName: '매트리스커버S', category: 'sheet', quantity: 12  },
+			{ laundryItemId: 'client-001__매트리스커버D', itemName: '매트리스커버D', category: 'sheet', quantity: 18  },
+			{ laundryItemId: 'client-001__매트리스커버K', itemName: '매트리스커버K', category: 'sheet', quantity: 10  }
+		],
+		driverId: 'driver-001', memo: '6월 침구류 전체 교체',
+		shippedAt: sampleDate(6, 27, 8, 0), createdAt: sampleDate(6, 27, 7, 30)
 	},
 	{
 		id: 'ship-025',
@@ -517,6 +831,385 @@ const initialShipments: Shipment[] = [
 		],
 		driverId: 'driver-003',
 		shippedAt: sampleDate(6, 26, 14, 0), createdAt: sampleDate(6, 26, 13, 30)
+	},
+	// ── 7월 ──────────────────────────────────────────────
+	// 7월 1차 (5일): 성수기 대규모 — 22종
+	{
+		id: 'ship-026',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',     itemName: '대타올',     category: 'towel', quantity: 130 },
+			{ laundryItemId: 'client-001__중타올',     itemName: '중타올',     category: 'towel', quantity: 100 },
+			{ laundryItemId: 'client-001__소타올',     itemName: '소타올',     category: 'towel', quantity: 80  },
+			{ laundryItemId: 'client-001__핸드타올',   itemName: '핸드타올',   category: 'towel', quantity: 60  },
+			{ laundryItemId: 'client-001__페이스타올', itemName: '페이스타올', category: 'towel', quantity: 55  },
+			{ laundryItemId: 'client-001__목욕가운',   itemName: '목욕가운',   category: 'towel', quantity: 40  },
+			{ laundryItemId: 'client-001__슬리퍼타올', itemName: '슬리퍼타올', category: 'towel', quantity: 35  },
+			{ laundryItemId: 'client-001__풀타올',     itemName: '풀타올',     category: 'towel', quantity: 30  },
+			{ laundryItemId: 'client-001__비치타올',   itemName: '비치타올',   category: 'towel', quantity: 80  },
+			{ laundryItemId: 'client-001__짐타올',     itemName: '짐타올',     category: 'towel', quantity: 20  },
+			{ laundryItemId: 'client-001__시트D',      itemName: '시트D',      category: 'sheet', quantity: 75  },
+			{ laundryItemId: 'client-001__시트K',      itemName: '시트K',      category: 'sheet', quantity: 40  },
+			{ laundryItemId: 'client-001__두베커버D',  itemName: '두베커버D',  category: 'sheet', quantity: 68  },
+			{ laundryItemId: 'client-001__두베커버K',  itemName: '두베커버K',  category: 'sheet', quantity: 38  },
+			{ laundryItemId: 'client-001__베개커버',   itemName: '베개커버',   category: 'sheet', quantity: 120 },
+			{ laundryItemId: 'client-001__베개커버L',  itemName: '베개커버L',  category: 'sheet', quantity: 45  },
+			{ laundryItemId: 'client-001__상의',       itemName: '상의',       category: 'uniform', quantity: 26 },
+			{ laundryItemId: 'client-001__하의',       itemName: '하의',       category: 'uniform', quantity: 26 },
+			{ laundryItemId: 'client-001__주방복상의', itemName: '주방복상의', category: 'uniform', quantity: 18 },
+			{ laundryItemId: 'client-001__주방복하의', itemName: '주방복하의', category: 'uniform', quantity: 18 },
+			{ laundryItemId: 'client-001__청소복',     itemName: '청소복',     category: 'uniform', quantity: 14 },
+			{ laundryItemId: 'client-001__객실복',     itemName: '객실복',     category: 'uniform', quantity: 12 }
+		],
+		driverId: 'driver-001', memo: '7월 1차 (성수기)',
+		shippedAt: sampleDate(7, 5, 8, 0), createdAt: sampleDate(7, 5, 7, 30)
+	},
+	// 7월 중간 (12일): 비치타올+타올 위주 — 8종
+	{
+		id: 'ship-026b',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',   itemName: '대타올',   category: 'towel', quantity: 80  },
+			{ laundryItemId: 'client-001__비치타올', itemName: '비치타올', category: 'towel', quantity: 100 },
+			{ laundryItemId: 'client-001__풀타올',   itemName: '풀타올',   category: 'towel', quantity: 40  },
+			{ laundryItemId: 'client-001__짐타올',   itemName: '짐타올',   category: 'towel', quantity: 25  },
+			{ laundryItemId: 'client-001__시트D',    itemName: '시트D',    category: 'sheet', quantity: 60  },
+			{ laundryItemId: 'client-001__베개커버', itemName: '베개커버', category: 'sheet', quantity: 90  },
+			{ laundryItemId: 'client-001__벨복',     itemName: '벨복',     category: 'uniform', quantity: 8  },
+			{ laundryItemId: 'client-001__안전조끼', itemName: '안전조끼', category: 'uniform', quantity: 10 }
+		],
+		driverId: 'driver-001', memo: '7월 추가 배송',
+		shippedAt: sampleDate(7, 12, 10, 0), createdAt: sampleDate(7, 12, 9, 30)
+	},
+	// 7월 2차 (20일): 전체 정기 — 20종
+	{
+		id: 'ship-027',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',     itemName: '대타올',     category: 'towel', quantity: 125 },
+			{ laundryItemId: 'client-001__중타올',     itemName: '중타올',     category: 'towel', quantity: 95  },
+			{ laundryItemId: 'client-001__소타올',     itemName: '소타올',     category: 'towel', quantity: 75  },
+			{ laundryItemId: 'client-001__핸드타올',   itemName: '핸드타올',   category: 'towel', quantity: 58  },
+			{ laundryItemId: 'client-001__페이스타올', itemName: '페이스타올', category: 'towel', quantity: 50  },
+			{ laundryItemId: 'client-001__목욕가운',   itemName: '목욕가운',   category: 'towel', quantity: 38  },
+			{ laundryItemId: 'client-001__슬리퍼타올', itemName: '슬리퍼타올', category: 'towel', quantity: 32  },
+			{ laundryItemId: 'client-001__비치타올',   itemName: '비치타올',   category: 'towel', quantity: 90  },
+			{ laundryItemId: 'client-001__시트S',      itemName: '시트S',      category: 'sheet', quantity: 44  },
+			{ laundryItemId: 'client-001__시트D',      itemName: '시트D',      category: 'sheet', quantity: 72  },
+			{ laundryItemId: 'client-001__시트K',      itemName: '시트K',      category: 'sheet', quantity: 38  },
+			{ laundryItemId: 'client-001__두베커버D',  itemName: '두베커버D',  category: 'sheet', quantity: 65  },
+			{ laundryItemId: 'client-001__두베커버K',  itemName: '두베커버K',  category: 'sheet', quantity: 35  },
+			{ laundryItemId: 'client-001__베개커버',   itemName: '베개커버',   category: 'sheet', quantity: 115 },
+			{ laundryItemId: 'client-001__베개커버L',  itemName: '베개커버L',  category: 'sheet', quantity: 42  },
+			{ laundryItemId: 'client-001__상의',       itemName: '상의',       category: 'uniform', quantity: 25 },
+			{ laundryItemId: 'client-001__하의',       itemName: '하의',       category: 'uniform', quantity: 25 },
+			{ laundryItemId: 'client-001__앞치마',     itemName: '앞치마',     category: 'uniform', quantity: 19 },
+			{ laundryItemId: 'client-001__주방복상의', itemName: '주방복상의', category: 'uniform', quantity: 17 },
+			{ laundryItemId: 'client-001__주방복하의', itemName: '주방복하의', category: 'uniform', quantity: 17 }
+		],
+		driverId: 'driver-001', memo: '7월 2차 (성수기)',
+		shippedAt: sampleDate(7, 20, 8, 0), createdAt: sampleDate(7, 20, 7, 30)
+	},
+	// ── 8월 ──────────────────────────────────────────────
+	// 8월 1차 (4일): 성수기 피크 — 28종
+	{
+		id: 'ship-028',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',        itemName: '대타올',        category: 'towel', quantity: 140 },
+			{ laundryItemId: 'client-001__중타올',        itemName: '중타올',        category: 'towel', quantity: 110 },
+			{ laundryItemId: 'client-001__소타올',        itemName: '소타올',        category: 'towel', quantity: 90  },
+			{ laundryItemId: 'client-001__핸드타올',      itemName: '핸드타올',      category: 'towel', quantity: 70  },
+			{ laundryItemId: 'client-001__페이스타올',    itemName: '페이스타올',    category: 'towel', quantity: 62  },
+			{ laundryItemId: 'client-001__목욕가운',      itemName: '목욕가운',      category: 'towel', quantity: 45  },
+			{ laundryItemId: 'client-001__슬리퍼타올',   itemName: '슬리퍼타올',   category: 'towel', quantity: 40  },
+			{ laundryItemId: 'client-001__풀타올',        itemName: '풀타올',        category: 'towel', quantity: 35  },
+			{ laundryItemId: 'client-001__비치타올',      itemName: '비치타올',      category: 'towel', quantity: 120 },
+			{ laundryItemId: 'client-001__짐타올',        itemName: '짐타올',        category: 'towel', quantity: 30  },
+			{ laundryItemId: 'client-001__시트S',         itemName: '시트S',         category: 'sheet', quantity: 48  },
+			{ laundryItemId: 'client-001__시트D',         itemName: '시트D',         category: 'sheet', quantity: 80  },
+			{ laundryItemId: 'client-001__시트Q',         itemName: '시트Q',         category: 'sheet', quantity: 35  },
+			{ laundryItemId: 'client-001__시트K',         itemName: '시트K',         category: 'sheet', quantity: 45  },
+			{ laundryItemId: 'client-001__두베커버S',     itemName: '두베커버S',     category: 'sheet', quantity: 42  },
+			{ laundryItemId: 'client-001__두베커버D',     itemName: '두베커버D',     category: 'sheet', quantity: 72  },
+			{ laundryItemId: 'client-001__두베커버Q',     itemName: '두베커버Q',     category: 'sheet', quantity: 32  },
+			{ laundryItemId: 'client-001__두베커버K',     itemName: '두베커버K',     category: 'sheet', quantity: 40  },
+			{ laundryItemId: 'client-001__베개커버',      itemName: '베개커버',      category: 'sheet', quantity: 130 },
+			{ laundryItemId: 'client-001__베개커버L',     itemName: '베개커버L',     category: 'sheet', quantity: 50  },
+			{ laundryItemId: 'client-001__매트리스커버S', itemName: '매트리스커버S', category: 'sheet', quantity: 15  },
+			{ laundryItemId: 'client-001__매트리스커버D', itemName: '매트리스커버D', category: 'sheet', quantity: 22  },
+			{ laundryItemId: 'client-001__매트리스커버K', itemName: '매트리스커버K', category: 'sheet', quantity: 14  },
+			{ laundryItemId: 'client-001__상의',          itemName: '상의',          category: 'uniform', quantity: 30 },
+			{ laundryItemId: 'client-001__하의',          itemName: '하의',          category: 'uniform', quantity: 30 },
+			{ laundryItemId: 'client-001__앞치마',        itemName: '앞치마',        category: 'uniform', quantity: 22 },
+			{ laundryItemId: 'client-001__주방복상의',    itemName: '주방복상의',    category: 'uniform', quantity: 20 },
+			{ laundryItemId: 'client-001__주방복하의',    itemName: '주방복하의',    category: 'uniform', quantity: 20 }
+		],
+		driverId: 'driver-001', memo: '8월 1차 (성수기 피크)',
+		shippedAt: sampleDate(8, 4, 8, 0), createdAt: sampleDate(8, 4, 7, 30)
+	},
+	// 8월 중간 (13일): 비치타올+수영장 용품 위주 — 9종
+	{
+		id: 'ship-028b',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__비치타올', itemName: '비치타올', category: 'towel', quantity: 150 },
+			{ laundryItemId: 'client-001__풀타올',   itemName: '풀타올',   category: 'towel', quantity: 60  },
+			{ laundryItemId: 'client-001__짐타올',   itemName: '짐타올',   category: 'towel', quantity: 40  },
+			{ laundryItemId: 'client-001__대타올',   itemName: '대타올',   category: 'towel', quantity: 100 },
+			{ laundryItemId: 'client-001__중타올',   itemName: '중타올',   category: 'towel', quantity: 80  },
+			{ laundryItemId: 'client-001__슬리퍼타올', itemName: '슬리퍼타올', category: 'towel', quantity: 50 },
+			{ laundryItemId: 'client-001__목욕가운', itemName: '목욕가운', category: 'towel', quantity: 35  },
+			{ laundryItemId: 'client-001__시트D',    itemName: '시트D',    category: 'sheet', quantity: 70  },
+			{ laundryItemId: 'client-001__베개커버', itemName: '베개커버', category: 'sheet', quantity: 100 }
+		],
+		driverId: 'driver-001', memo: '8월 수영장 용품 추가',
+		shippedAt: sampleDate(8, 13, 9, 0), createdAt: sampleDate(8, 13, 8, 30)
+	},
+	// 8월 2차 (22일): 전체 — 18종
+	{
+		id: 'ship-029',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',     itemName: '대타올',     category: 'towel', quantity: 115 },
+			{ laundryItemId: 'client-001__중타올',     itemName: '중타올',     category: 'towel', quantity: 88  },
+			{ laundryItemId: 'client-001__소타올',     itemName: '소타올',     category: 'towel', quantity: 68  },
+			{ laundryItemId: 'client-001__핸드타올',   itemName: '핸드타올',   category: 'towel', quantity: 55  },
+			{ laundryItemId: 'client-001__페이스타올', itemName: '페이스타올', category: 'towel', quantity: 48  },
+			{ laundryItemId: 'client-001__목욕가운',   itemName: '목욕가운',   category: 'towel', quantity: 42  },
+			{ laundryItemId: 'client-001__비치타올',   itemName: '비치타올',   category: 'towel', quantity: 110 },
+			{ laundryItemId: 'client-001__시트D',      itemName: '시트D',      category: 'sheet', quantity: 76  },
+			{ laundryItemId: 'client-001__시트K',      itemName: '시트K',      category: 'sheet', quantity: 42  },
+			{ laundryItemId: 'client-001__두베커버D',  itemName: '두베커버D',  category: 'sheet', quantity: 68  },
+			{ laundryItemId: 'client-001__두베커버K',  itemName: '두베커버K',  category: 'sheet', quantity: 38  },
+			{ laundryItemId: 'client-001__베개커버',   itemName: '베개커버',   category: 'sheet', quantity: 120 },
+			{ laundryItemId: 'client-001__베개커버L',  itemName: '베개커버L',  category: 'sheet', quantity: 48  },
+			{ laundryItemId: 'client-001__상의',       itemName: '상의',       category: 'uniform', quantity: 28 },
+			{ laundryItemId: 'client-001__하의',       itemName: '하의',       category: 'uniform', quantity: 28 },
+			{ laundryItemId: 'client-001__청소복',     itemName: '청소복',     category: 'uniform', quantity: 16 },
+			{ laundryItemId: 'client-001__객실복',     itemName: '객실복',     category: 'uniform', quantity: 14 },
+			{ laundryItemId: 'client-001__벨복',       itemName: '벨복',       category: 'uniform', quantity: 8  }
+		],
+		driverId: 'driver-001', memo: '8월 2차 (성수기)',
+		shippedAt: sampleDate(8, 22, 8, 0), createdAt: sampleDate(8, 22, 7, 30)
+	},
+	// ── 9월 ──────────────────────────────────────────────
+	// 9월 1차 (4일): 성수기 종료 정리 — 14종
+	{
+		id: 'ship-030',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',     itemName: '대타올',     category: 'towel', quantity: 88  },
+			{ laundryItemId: 'client-001__중타올',     itemName: '중타올',     category: 'towel', quantity: 68  },
+			{ laundryItemId: 'client-001__소타올',     itemName: '소타올',     category: 'towel', quantity: 52  },
+			{ laundryItemId: 'client-001__핸드타올',   itemName: '핸드타올',   category: 'towel', quantity: 40  },
+			{ laundryItemId: 'client-001__비치타올',   itemName: '비치타올',   category: 'towel', quantity: 45  },
+			{ laundryItemId: 'client-001__목욕가운',   itemName: '목욕가운',   category: 'towel', quantity: 30  },
+			{ laundryItemId: 'client-001__시트D',      itemName: '시트D',      category: 'sheet', quantity: 60  },
+			{ laundryItemId: 'client-001__시트K',      itemName: '시트K',      category: 'sheet', quantity: 32  },
+			{ laundryItemId: 'client-001__두베커버D',  itemName: '두베커버D',  category: 'sheet', quantity: 55  },
+			{ laundryItemId: 'client-001__베개커버',   itemName: '베개커버',   category: 'sheet', quantity: 98  },
+			{ laundryItemId: 'client-001__베개커버L',  itemName: '베개커버L',  category: 'sheet', quantity: 35  },
+			{ laundryItemId: 'client-001__상의',       itemName: '상의',       category: 'uniform', quantity: 22 },
+			{ laundryItemId: 'client-001__하의',       itemName: '하의',       category: 'uniform', quantity: 22 },
+			{ laundryItemId: 'client-001__주방복상의', itemName: '주방복상의', category: 'uniform', quantity: 16 }
+		],
+		driverId: 'driver-001', memo: '9월 1차',
+		shippedAt: sampleDate(9, 4, 8, 0), createdAt: sampleDate(9, 4, 7, 30)
+	},
+	// 9월 2차 (18일): 타올+침구 — 12종
+	{
+		id: 'ship-031',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',     itemName: '대타올',     category: 'towel', quantity: 82  },
+			{ laundryItemId: 'client-001__중타올',     itemName: '중타올',     category: 'towel', quantity: 62  },
+			{ laundryItemId: 'client-001__소타올',     itemName: '소타올',     category: 'towel', quantity: 48  },
+			{ laundryItemId: 'client-001__핸드타올',   itemName: '핸드타올',   category: 'towel', quantity: 35  },
+			{ laundryItemId: 'client-001__목욕가운',   itemName: '목욕가운',   category: 'towel', quantity: 26  },
+			{ laundryItemId: 'client-001__시트D',      itemName: '시트D',      category: 'sheet', quantity: 55  },
+			{ laundryItemId: 'client-001__두베커버D',  itemName: '두베커버D',  category: 'sheet', quantity: 48  },
+			{ laundryItemId: 'client-001__베개커버',   itemName: '베개커버',   category: 'sheet', quantity: 90  },
+			{ laundryItemId: 'client-001__상의',       itemName: '상의',       category: 'uniform', quantity: 20 },
+			{ laundryItemId: 'client-001__하의',       itemName: '하의',       category: 'uniform', quantity: 20 },
+			{ laundryItemId: 'client-001__앞치마',     itemName: '앞치마',     category: 'uniform', quantity: 14 },
+			{ laundryItemId: 'client-001__청소복',     itemName: '청소복',     category: 'uniform', quantity: 11 }
+		],
+		driverId: 'driver-001', memo: '9월 2차',
+		shippedAt: sampleDate(9, 18, 8, 0), createdAt: sampleDate(9, 18, 7, 30)
+	},
+	// ── 10월 ─────────────────────────────────────────────
+	// 10월 1차 (7일): 타올+침구 — 10종
+	{
+		id: 'ship-032',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',     itemName: '대타올',     category: 'towel', quantity: 80  },
+			{ laundryItemId: 'client-001__중타올',     itemName: '중타올',     category: 'towel', quantity: 60  },
+			{ laundryItemId: 'client-001__소타올',     itemName: '소타올',     category: 'towel', quantity: 45  },
+			{ laundryItemId: 'client-001__핸드타올',   itemName: '핸드타올',   category: 'towel', quantity: 32  },
+			{ laundryItemId: 'client-001__목욕가운',   itemName: '목욕가운',   category: 'towel', quantity: 24  },
+			{ laundryItemId: 'client-001__시트D',      itemName: '시트D',      category: 'sheet', quantity: 52  },
+			{ laundryItemId: 'client-001__두베커버D',  itemName: '두베커버D',  category: 'sheet', quantity: 44  },
+			{ laundryItemId: 'client-001__베개커버',   itemName: '베개커버',   category: 'sheet', quantity: 85  },
+			{ laundryItemId: 'client-001__상의',       itemName: '상의',       category: 'uniform', quantity: 18 },
+			{ laundryItemId: 'client-001__하의',       itemName: '하의',       category: 'uniform', quantity: 18 }
+		],
+		driverId: 'driver-001', memo: '10월 1차',
+		shippedAt: sampleDate(10, 7, 8, 0), createdAt: sampleDate(10, 7, 7, 30)
+	},
+	// 10월 중간 (15일): 유니폼 교체 위주 — 11종
+	{
+		id: 'ship-032b',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__상의',       itemName: '상의',       category: 'uniform', quantity: 26 },
+			{ laundryItemId: 'client-001__하의',       itemName: '하의',       category: 'uniform', quantity: 26 },
+			{ laundryItemId: 'client-001__앞치마',     itemName: '앞치마',     category: 'uniform', quantity: 20 },
+			{ laundryItemId: 'client-001__조끼',       itemName: '조끼',       category: 'uniform', quantity: 18 },
+			{ laundryItemId: 'client-001__모자',       itemName: '모자',       category: 'uniform', quantity: 15 },
+			{ laundryItemId: 'client-001__주방복상의', itemName: '주방복상의', category: 'uniform', quantity: 16 },
+			{ laundryItemId: 'client-001__주방복하의', itemName: '주방복하의', category: 'uniform', quantity: 16 },
+			{ laundryItemId: 'client-001__청소복',     itemName: '청소복',     category: 'uniform', quantity: 13 },
+			{ laundryItemId: 'client-001__객실복',     itemName: '객실복',     category: 'uniform', quantity: 11 },
+			{ laundryItemId: 'client-001__벨복',       itemName: '벨복',       category: 'uniform', quantity: 7  },
+			{ laundryItemId: 'client-001__안전조끼',   itemName: '안전조끼',   category: 'uniform', quantity: 9  }
+		],
+		driverId: 'driver-001', memo: '10월 유니폼 정기',
+		shippedAt: sampleDate(10, 15, 9, 0), createdAt: sampleDate(10, 15, 8, 30)
+	},
+	// 10월 2차 (24일): 타올+침구 — 14종
+	{
+		id: 'ship-033',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',     itemName: '대타올',     category: 'towel', quantity: 78  },
+			{ laundryItemId: 'client-001__중타올',     itemName: '중타올',     category: 'towel', quantity: 58  },
+			{ laundryItemId: 'client-001__소타올',     itemName: '소타올',     category: 'towel', quantity: 42  },
+			{ laundryItemId: 'client-001__핸드타올',   itemName: '핸드타올',   category: 'towel', quantity: 30  },
+			{ laundryItemId: 'client-001__목욕가운',   itemName: '목욕가운',   category: 'towel', quantity: 22  },
+			{ laundryItemId: 'client-001__시트S',      itemName: '시트S',      category: 'sheet', quantity: 36  },
+			{ laundryItemId: 'client-001__시트D',      itemName: '시트D',      category: 'sheet', quantity: 50  },
+			{ laundryItemId: 'client-001__시트Q',      itemName: '시트Q',      category: 'sheet', quantity: 20  },
+			{ laundryItemId: 'client-001__시트K',      itemName: '시트K',      category: 'sheet', quantity: 26  },
+			{ laundryItemId: 'client-001__두베커버D',  itemName: '두베커버D',  category: 'sheet', quantity: 42  },
+			{ laundryItemId: 'client-001__두베커버K',  itemName: '두베커버K',  category: 'sheet', quantity: 24  },
+			{ laundryItemId: 'client-001__베개커버',   itemName: '베개커버',   category: 'sheet', quantity: 82  },
+			{ laundryItemId: 'client-001__베개커버L',  itemName: '베개커버L',  category: 'sheet', quantity: 28  },
+			{ laundryItemId: 'client-001__매트리스커버D', itemName: '매트리스커버D', category: 'sheet', quantity: 12 }
+		],
+		driverId: 'driver-001', memo: '10월 2차',
+		shippedAt: sampleDate(10, 24, 8, 0), createdAt: sampleDate(10, 24, 7, 30)
+	},
+	// ── 11월 ─────────────────────────────────────────────
+	// 11월 1차 (5일): 타올+침구 — 10종
+	{
+		id: 'ship-034',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',    itemName: '대타올',    category: 'towel', quantity: 75  },
+			{ laundryItemId: 'client-001__중타올',    itemName: '중타올',    category: 'towel', quantity: 55  },
+			{ laundryItemId: 'client-001__소타올',    itemName: '소타올',    category: 'towel', quantity: 40  },
+			{ laundryItemId: 'client-001__핸드타올',  itemName: '핸드타올',  category: 'towel', quantity: 28  },
+			{ laundryItemId: 'client-001__목욕가운',  itemName: '목욕가운',  category: 'towel', quantity: 20  },
+			{ laundryItemId: 'client-001__시트D',     itemName: '시트D',     category: 'sheet', quantity: 48  },
+			{ laundryItemId: 'client-001__두베커버D', itemName: '두베커버D', category: 'sheet', quantity: 40  },
+			{ laundryItemId: 'client-001__베개커버',  itemName: '베개커버',  category: 'sheet', quantity: 80  },
+			{ laundryItemId: 'client-001__상의',      itemName: '상의',      category: 'uniform', quantity: 18 },
+			{ laundryItemId: 'client-001__하의',      itemName: '하의',      category: 'uniform', quantity: 18 }
+		],
+		driverId: 'driver-001', memo: '11월 1차',
+		shippedAt: sampleDate(11, 5, 8, 0), createdAt: sampleDate(11, 5, 7, 30)
+	},
+	// 11월 2차 (20일): 침구 교체+유니폼 — 16종
+	{
+		id: 'ship-035',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__시트S',         itemName: '시트S',         category: 'sheet', quantity: 35  },
+			{ laundryItemId: 'client-001__시트D',         itemName: '시트D',         category: 'sheet', quantity: 55  },
+			{ laundryItemId: 'client-001__시트Q',         itemName: '시트Q',         category: 'sheet', quantity: 22  },
+			{ laundryItemId: 'client-001__시트K',         itemName: '시트K',         category: 'sheet', quantity: 28  },
+			{ laundryItemId: 'client-001__두베커버S',     itemName: '두베커버S',     category: 'sheet', quantity: 30  },
+			{ laundryItemId: 'client-001__두베커버D',     itemName: '두베커버D',     category: 'sheet', quantity: 48  },
+			{ laundryItemId: 'client-001__두베커버K',     itemName: '두베커버K',     category: 'sheet', quantity: 26  },
+			{ laundryItemId: 'client-001__베개커버',      itemName: '베개커버',      category: 'sheet', quantity: 88  },
+			{ laundryItemId: 'client-001__베개커버L',     itemName: '베개커버L',     category: 'sheet', quantity: 30  },
+			{ laundryItemId: 'client-001__매트리스커버D', itemName: '매트리스커버D', category: 'sheet', quantity: 14  },
+			{ laundryItemId: 'client-001__상의',          itemName: '상의',          category: 'uniform', quantity: 22 },
+			{ laundryItemId: 'client-001__하의',          itemName: '하의',          category: 'uniform', quantity: 22 },
+			{ laundryItemId: 'client-001__주방복상의',    itemName: '주방복상의',    category: 'uniform', quantity: 15 },
+			{ laundryItemId: 'client-001__주방복하의',    itemName: '주방복하의',    category: 'uniform', quantity: 15 },
+			{ laundryItemId: 'client-001__청소복',        itemName: '청소복',        category: 'uniform', quantity: 12 },
+			{ laundryItemId: 'client-001__객실복',        itemName: '객실복',        category: 'uniform', quantity: 10 }
+		],
+		driverId: 'driver-001', memo: '11월 2차',
+		shippedAt: sampleDate(11, 20, 8, 0), createdAt: sampleDate(11, 20, 7, 30)
+	},
+	// ── 12월 ─────────────────────────────────────────────
+	// 12월 1차 (4일): 타올+침구 — 8종
+	{
+		id: 'ship-036',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',    itemName: '대타올',    category: 'towel', quantity: 72  },
+			{ laundryItemId: 'client-001__중타올',    itemName: '중타올',    category: 'towel', quantity: 52  },
+			{ laundryItemId: 'client-001__소타올',    itemName: '소타올',    category: 'towel', quantity: 38  },
+			{ laundryItemId: 'client-001__목욕가운',  itemName: '목욕가운',  category: 'towel', quantity: 18  },
+			{ laundryItemId: 'client-001__시트D',     itemName: '시트D',     category: 'sheet', quantity: 46  },
+			{ laundryItemId: 'client-001__두베커버D', itemName: '두베커버D', category: 'sheet', quantity: 38  },
+			{ laundryItemId: 'client-001__베개커버',  itemName: '베개커버',  category: 'sheet', quantity: 76  },
+			{ laundryItemId: 'client-001__상의',      itemName: '상의',      category: 'uniform', quantity: 16 }
+		],
+		driverId: 'driver-001', memo: '12월 1차',
+		shippedAt: sampleDate(12, 4, 8, 0), createdAt: sampleDate(12, 4, 7, 30)
+	},
+	// 12월 중간 (12일): 유니폼 전체+타올 — 17종
+	{
+		id: 'ship-036b',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',     itemName: '대타올',     category: 'towel', quantity: 70  },
+			{ laundryItemId: 'client-001__중타올',     itemName: '중타올',     category: 'towel', quantity: 50  },
+			{ laundryItemId: 'client-001__핸드타올',   itemName: '핸드타올',   category: 'towel', quantity: 28  },
+			{ laundryItemId: 'client-001__상의',       itemName: '상의',       category: 'uniform', quantity: 25 },
+			{ laundryItemId: 'client-001__하의',       itemName: '하의',       category: 'uniform', quantity: 25 },
+			{ laundryItemId: 'client-001__앞치마',     itemName: '앞치마',     category: 'uniform', quantity: 19 },
+			{ laundryItemId: 'client-001__조끼',       itemName: '조끼',       category: 'uniform', quantity: 17 },
+			{ laundryItemId: 'client-001__모자',       itemName: '모자',       category: 'uniform', quantity: 14 },
+			{ laundryItemId: 'client-001__주방복상의', itemName: '주방복상의', category: 'uniform', quantity: 16 },
+			{ laundryItemId: 'client-001__주방복하의', itemName: '주방복하의', category: 'uniform', quantity: 16 },
+			{ laundryItemId: 'client-001__청소복',     itemName: '청소복',     category: 'uniform', quantity: 13 },
+			{ laundryItemId: 'client-001__객실복',     itemName: '객실복',     category: 'uniform', quantity: 11 },
+			{ laundryItemId: 'client-001__벨복',       itemName: '벨복',       category: 'uniform', quantity: 7  },
+			{ laundryItemId: 'client-001__안전조끼',   itemName: '안전조끼',   category: 'uniform', quantity: 9  },
+			{ laundryItemId: 'client-001__시트D',      itemName: '시트D',      category: 'sheet', quantity: 44  },
+			{ laundryItemId: 'client-001__두베커버D',  itemName: '두베커버D',  category: 'sheet', quantity: 36  },
+			{ laundryItemId: 'client-001__베개커버',   itemName: '베개커버',   category: 'sheet', quantity: 74  }
+		],
+		driverId: 'driver-001', memo: '12월 유니폼 정기',
+		shippedAt: sampleDate(12, 12, 9, 0), createdAt: sampleDate(12, 12, 8, 30)
+	},
+	// 12월 2차 (20일): 연말 정기 — 12종
+	{
+		id: 'ship-037',
+		clientId: 'client-001',
+		items: [
+			{ laundryItemId: 'client-001__대타올',     itemName: '대타올',     category: 'towel', quantity: 76  },
+			{ laundryItemId: 'client-001__중타올',     itemName: '중타올',     category: 'towel', quantity: 56  },
+			{ laundryItemId: 'client-001__소타올',     itemName: '소타올',     category: 'towel', quantity: 40  },
+			{ laundryItemId: 'client-001__핸드타올',   itemName: '핸드타올',   category: 'towel', quantity: 30  },
+			{ laundryItemId: 'client-001__목욕가운',   itemName: '목욕가운',   category: 'towel', quantity: 22  },
+			{ laundryItemId: 'client-001__시트D',      itemName: '시트D',      category: 'sheet', quantity: 50  },
+			{ laundryItemId: 'client-001__시트K',      itemName: '시트K',      category: 'sheet', quantity: 28  },
+			{ laundryItemId: 'client-001__두베커버D',  itemName: '두베커버D',  category: 'sheet', quantity: 42  },
+			{ laundryItemId: 'client-001__두베커버K',  itemName: '두베커버K',  category: 'sheet', quantity: 25  },
+			{ laundryItemId: 'client-001__베개커버',   itemName: '베개커버',   category: 'sheet', quantity: 82  },
+			{ laundryItemId: 'client-001__상의',       itemName: '상의',       category: 'uniform', quantity: 20 },
+			{ laundryItemId: 'client-001__하의',       itemName: '하의',       category: 'uniform', quantity: 20 }
+		],
+		driverId: 'driver-001', memo: '12월 2차 (연말)',
+		shippedAt: sampleDate(12, 20, 8, 0), createdAt: sampleDate(12, 20, 7, 30)
 	}
 ];
 
@@ -565,31 +1258,51 @@ const initialAdminUsers: AdminUser[] = [
 // ------------------------------------------------------------------
 
 const initialClientItemPrices: ClientItemPrice[] = [
-	// 그랜드호텔 (client-001) 단가
+	// ── 그랜드호텔 (client-001) 단가 — 타올 10종 ──
 	{ clientId: 'client-001', category: 'towel', itemName: '대타올',      unitPrice: 800  },
 	{ clientId: 'client-001', category: 'towel', itemName: '중타올',      unitPrice: 600  },
 	{ clientId: 'client-001', category: 'towel', itemName: '소타올',      unitPrice: 400  },
 	{ clientId: 'client-001', category: 'towel', itemName: '목욕가운',    unitPrice: 2500 },
 	{ clientId: 'client-001', category: 'towel', itemName: '슬리퍼타올', unitPrice: 500  },
-	{ clientId: 'client-001', category: 'sheet', itemName: '시트S',       unitPrice: 1200 },
-	{ clientId: 'client-001', category: 'sheet', itemName: '시트D',       unitPrice: 1500 },
-	{ clientId: 'client-001', category: 'sheet', itemName: '시트Q',       unitPrice: 1800 },
-	{ clientId: 'client-001', category: 'sheet', itemName: '시트K',       unitPrice: 2000 },
-	{ clientId: 'client-001', category: 'sheet', itemName: '두베커버S',   unitPrice: 1500 },
-	{ clientId: 'client-001', category: 'sheet', itemName: '두베커버D',   unitPrice: 1800 },
-	{ clientId: 'client-001', category: 'sheet', itemName: '두베커버K',   unitPrice: 2200 },
-	{ clientId: 'client-001', category: 'sheet', itemName: '베개커버',    unitPrice: 500  },
-	{ clientId: 'client-001', category: 'uniform', itemName: '상의',      unitPrice: 1500 },
-	{ clientId: 'client-001', category: 'uniform', itemName: '하의',      unitPrice: 1500 },
-	{ clientId: 'client-001', category: 'uniform', itemName: '앞치마',    unitPrice: 800  },
-	{ clientId: 'client-001', category: 'uniform', itemName: '조끼',      unitPrice: 1000 },
-	{ clientId: 'client-001', category: 'uniform', itemName: '모자',      unitPrice: 500  },
-	// 씨뷰펜션 (client-002) 단가
+	{ clientId: 'client-001', category: 'towel', itemName: '핸드타올',   unitPrice: 350  },
+	{ clientId: 'client-001', category: 'towel', itemName: '페이스타올', unitPrice: 450  },
+	{ clientId: 'client-001', category: 'towel', itemName: '풀타올',     unitPrice: 1200 },
+	{ clientId: 'client-001', category: 'towel', itemName: '짐타올',     unitPrice: 700  },
+	{ clientId: 'client-001', category: 'towel', itemName: '비치타올',   unitPrice: 900  },
+	// 그랜드호텔 (client-001) — 시트·침구 13종
+	{ clientId: 'client-001', category: 'sheet', itemName: '시트S',           unitPrice: 1200 },
+	{ clientId: 'client-001', category: 'sheet', itemName: '시트D',           unitPrice: 1500 },
+	{ clientId: 'client-001', category: 'sheet', itemName: '시트Q',           unitPrice: 1800 },
+	{ clientId: 'client-001', category: 'sheet', itemName: '시트K',           unitPrice: 2000 },
+	{ clientId: 'client-001', category: 'sheet', itemName: '두베커버S',       unitPrice: 1500 },
+	{ clientId: 'client-001', category: 'sheet', itemName: '두베커버D',       unitPrice: 1800 },
+	{ clientId: 'client-001', category: 'sheet', itemName: '두베커버Q',       unitPrice: 2000 },
+	{ clientId: 'client-001', category: 'sheet', itemName: '두베커버K',       unitPrice: 2200 },
+	{ clientId: 'client-001', category: 'sheet', itemName: '베개커버',        unitPrice: 500  },
+	{ clientId: 'client-001', category: 'sheet', itemName: '베개커버L',       unitPrice: 600  },
+	{ clientId: 'client-001', category: 'sheet', itemName: '매트리스커버S',   unitPrice: 3000 },
+	{ clientId: 'client-001', category: 'sheet', itemName: '매트리스커버D',   unitPrice: 3500 },
+	{ clientId: 'client-001', category: 'sheet', itemName: '매트리스커버K',   unitPrice: 4000 },
+	// 그랜드호텔 (client-001) — 유니폼 11종
+	{ clientId: 'client-001', category: 'uniform', itemName: '상의',       unitPrice: 1500 },
+	{ clientId: 'client-001', category: 'uniform', itemName: '하의',       unitPrice: 1500 },
+	{ clientId: 'client-001', category: 'uniform', itemName: '앞치마',     unitPrice: 800  },
+	{ clientId: 'client-001', category: 'uniform', itemName: '조끼',       unitPrice: 1000 },
+	{ clientId: 'client-001', category: 'uniform', itemName: '모자',       unitPrice: 500  },
+	{ clientId: 'client-001', category: 'uniform', itemName: '주방복상의', unitPrice: 1800 },
+	{ clientId: 'client-001', category: 'uniform', itemName: '주방복하의', unitPrice: 1800 },
+	{ clientId: 'client-001', category: 'uniform', itemName: '청소복',     unitPrice: 1200 },
+	{ clientId: 'client-001', category: 'uniform', itemName: '객실복',     unitPrice: 2000 },
+	{ clientId: 'client-001', category: 'uniform', itemName: '벨복',       unitPrice: 2500 },
+	{ clientId: 'client-001', category: 'uniform', itemName: '안전조끼',   unitPrice: 600  },
+
+	// ── 씨뷰펜션 (client-002) 단가 ──
 	{ clientId: 'client-002', category: 'towel', itemName: '대타올',      unitPrice: 700  },
 	{ clientId: 'client-002', category: 'towel', itemName: '중타올',      unitPrice: 550  },
 	{ clientId: 'client-002', category: 'towel', itemName: '소타올',      unitPrice: 350  },
 	{ clientId: 'client-002', category: 'towel', itemName: '목욕가운',    unitPrice: 2200 },
 	{ clientId: 'client-002', category: 'towel', itemName: '슬리퍼타올', unitPrice: 450  },
+	{ clientId: 'client-002', category: 'towel', itemName: '핸드타올',   unitPrice: 320  },
 	{ clientId: 'client-002', category: 'sheet', itemName: '시트S',       unitPrice: 1100 },
 	{ clientId: 'client-002', category: 'sheet', itemName: '시트D',       unitPrice: 1400 },
 	{ clientId: 'client-002', category: 'sheet', itemName: '시트Q',       unitPrice: 1700 },
@@ -598,19 +1311,25 @@ const initialClientItemPrices: ClientItemPrice[] = [
 	{ clientId: 'client-002', category: 'sheet', itemName: '두베커버D',   unitPrice: 1700 },
 	{ clientId: 'client-002', category: 'sheet', itemName: '두베커버K',   unitPrice: 2000 },
 	{ clientId: 'client-002', category: 'sheet', itemName: '베개커버',    unitPrice: 450  },
-	// 파크리조트 (client-003) 단가
+
+	// ── 파크리조트 (client-003) 단가 ──
 	{ clientId: 'client-003', category: 'towel', itemName: '대타올',      unitPrice: 750  },
 	{ clientId: 'client-003', category: 'towel', itemName: '중타올',      unitPrice: 580  },
 	{ clientId: 'client-003', category: 'towel', itemName: '소타올',      unitPrice: 380  },
 	{ clientId: 'client-003', category: 'towel', itemName: '목욕가운',    unitPrice: 2300 },
+	{ clientId: 'client-003', category: 'towel', itemName: '핸드타올',   unitPrice: 330  },
 	{ clientId: 'client-003', category: 'sheet', itemName: '시트S',       unitPrice: 1150 },
 	{ clientId: 'client-003', category: 'sheet', itemName: '시트D',       unitPrice: 1450 },
 	{ clientId: 'client-003', category: 'sheet', itemName: '시트Q',       unitPrice: 1750 },
 	{ clientId: 'client-003', category: 'sheet', itemName: '시트K',       unitPrice: 1950 },
+	{ clientId: 'client-003', category: 'sheet', itemName: '두베커버D',   unitPrice: 1750 },
 	{ clientId: 'client-003', category: 'sheet', itemName: '베개커버',    unitPrice: 480  },
 	{ clientId: 'client-003', category: 'uniform', itemName: '상의',      unitPrice: 1400 },
 	{ clientId: 'client-003', category: 'uniform', itemName: '하의',      unitPrice: 1400 },
 	{ clientId: 'client-003', category: 'uniform', itemName: '앞치마',    unitPrice: 750  },
+	{ clientId: 'client-003', category: 'uniform', itemName: '주방복상의',unitPrice: 1600 },
+	{ clientId: 'client-003', category: 'uniform', itemName: '주방복하의',unitPrice: 1600 },
+	{ clientId: 'client-003', category: 'uniform', itemName: '청소복',    unitPrice: 1100 },
 ];
 
 // ------------------------------------------------------------------
@@ -665,6 +1384,60 @@ const initialClientContracts: ClientContract[] = [
 		endDate:   `${new Date().getFullYear()}-09-30`,
 		memo: '성수기 계약',
 		createdAt: sampleDate(3, 25, 9, 0)
+	}
+];
+
+// ------------------------------------------------------------------
+// 초기 데이터: 거래처별 기간 단가 규칙 (샘플)
+// ------------------------------------------------------------------
+
+const initialClientItemPriceRules: ClientItemPriceRule[] = [
+	// 그랜드호텔 상반기 특별 단가 (대타올 가격 인상)
+	{
+		id: 'price-rule-001',
+		clientId: 'client-001',
+		category: 'towel',
+		itemName: '대타올',
+		unitPrice: 900,
+		validFrom: `${new Date().getFullYear()}-01-01`,
+		validTo:   `${new Date().getFullYear()}-03-31`,
+		memo: '1분기 단가 인상 적용',
+		createdAt: sampleDate(1, 1, 9, 0)
+	},
+	// 씨뷰펜션 성수기 단가
+	{
+		id: 'price-rule-002',
+		clientId: 'client-002',
+		category: 'towel',
+		itemName: '대타올',
+		unitPrice: 850,
+		validFrom: `${new Date().getFullYear()}-07-01`,
+		validTo:   `${new Date().getFullYear()}-08-31`,
+		memo: '성수기 단가',
+		createdAt: sampleDate(6, 15, 9, 0)
+	},
+	{
+		id: 'price-rule-003',
+		clientId: 'client-002',
+		category: 'sheet',
+		itemName: '시트D',
+		unitPrice: 1600,
+		validFrom: `${new Date().getFullYear()}-07-01`,
+		validTo:   `${new Date().getFullYear()}-08-31`,
+		memo: '성수기 단가',
+		createdAt: sampleDate(6, 15, 9, 0)
+	},
+	// ♾️ 무기한 단가 규칙 예시 — "이 날짜부터 쭉" (validTo: null)
+	{
+		id: 'price-rule-004',
+		clientId: 'client-001',
+		category: 'towel',
+		itemName: '중타올',
+		unitPrice: 750,
+		validFrom: `${new Date().getFullYear()}-04-01`,
+		validTo:   null,   // 이 날짜부터 쭉 (무기한)
+		memo: '중타올 단가 인상 — 무기한 적용',
+		createdAt: sampleDate(4, 1, 9, 0)
 	}
 ];
 
@@ -740,6 +1513,7 @@ class LaundryStore {
 	adminUsers = $state<AdminUser[]>(initialAdminUsers);
 	clientMemos = $state<ClientMemo[]>(initialClientMemos);
 	clientItemPrices = $state<ClientItemPrice[]>(initialClientItemPrices);
+	clientItemPriceRules = $state<ClientItemPriceRule[]>(initialClientItemPriceRules);
 	clientContracts = $state<ClientContract[]>(initialClientContracts);
 	invoices = $state<Invoice[]>([]);
 	selectedClientId = $state<string | null>(initialClients[0]?.id ?? null);
@@ -833,6 +1607,21 @@ class LaundryStore {
 		}
 	}
 
+	/** 단일 품목 삭제 */
+	removeLaundryItem(id: string): void {
+		this.laundryItems = this.laundryItems.filter((i) => i.id !== id);
+	}
+
+	/** 특정 거래처의 카테고리 전체 품목 삭제 */
+	removeLaundryItemsByCategory(clientId: string, category: string): void {
+		this.laundryItems = this.laundryItems.filter(
+			(i) => !(i.clientId === clientId && i.category === category)
+		);
+		this.clientItemPrices = this.clientItemPrices.filter(
+			(p) => !(p.clientId === clientId && p.category === category)
+		);
+	}
+
 	// ------------------------------------------------------------------
 	// 품목 동적 추가
 	// ------------------------------------------------------------------
@@ -842,7 +1631,7 @@ class LaundryStore {
 	 */
 	addLaundryItemType(
 		clientId: string,
-		category: Exclude<LaundryCategory, 'all'>,
+		category: string,
 		name: string
 	): LaundryItem | null {
 		// 이미 해당 거래처에 같은 이름의 품목이 있으면 추가 안 함
@@ -867,7 +1656,7 @@ class LaundryStore {
 	 * 모든 거래처에 같은 이름의 품목 추가
 	 */
 	addLaundryItemTypeToAll(
-		category: Exclude<LaundryCategory, 'all'>,
+		category: string,
 		name: string
 	): LaundryItem[] {
 		const now = new Date().toISOString();
@@ -974,7 +1763,7 @@ class LaundryStore {
 			laundryItemId: itemId,
 			clientId,
 			itemName: item.name,
-			category: item.category,
+			category: item.category as Exclude<LaundryCategory, 'all'>,
 			actionType: 'add',
 			delta: actualDelta,
 			before,
@@ -1015,7 +1804,7 @@ class LaundryStore {
 			laundryItemId: itemId,
 			clientId,
 			itemName: item.name,
-			category: item.category,
+			category: item.category as Exclude<LaundryCategory, 'all'>,
 			actionType: 'set',
 			delta,
 			before,
@@ -1316,7 +2105,7 @@ class LaundryStore {
 	/** 거래처의 특정 품목 단가 설정 (없으면 추가, 있으면 업데이트) */
 	setClientItemPrice(
 		clientId: string,
-		category: Exclude<LaundryCategory, 'all'>,
+		category: string,
 		itemName: string,
 		unitPrice: number
 	): void {
@@ -1340,12 +2129,33 @@ class LaundryStore {
 		return this.clientItemPrices.filter((p) => p.clientId === clientId);
 	}
 
-	/** 거래처 특정 품목 단가 조회 (없으면 0) */
+	/** 거래처 특정 품목 단가 조회 (없으면 0)
+	 *  date(YYYY-MM-DD) 제공 시 기간별 단가 규칙을 우선 적용하고,
+	 *  없으면 기본 단가(상품관리)를 반환.
+	 *  validTo = null 이면 validFrom 이후 무기한 적용.
+	 *  동일 날짜에 여러 규칙이 매칭되면 validFrom 이 가장 늦은 규칙 우선.
+	 */
 	getUnitPrice(
 		clientId: string,
-		category: Exclude<LaundryCategory, 'all'>,
-		itemName: string
+		category: string,
+		itemName: string,
+		date?: string
 	): number {
+		// 1) 기간별 단가 규칙 먼저 확인 (최신 validFrom 규칙 우선)
+		if (date) {
+			const rule = [...this.clientItemPriceRules]
+				.filter(
+					(r) =>
+						r.clientId === clientId &&
+						r.category === category &&
+						r.itemName === itemName &&
+						r.validFrom <= date &&
+						(!r.validTo || r.validTo >= date) // null validTo = 무기한
+				)
+				.sort((a, b) => b.validFrom.localeCompare(a.validFrom))[0]; // 가장 최근 규칙 우선
+			if (rule) return rule.unitPrice;
+		}
+		// 2) 기본 단가 fallback
 		return (
 			this.clientItemPrices.find(
 				(p) => p.clientId === clientId && p.category === category && p.itemName === itemName
@@ -1358,6 +2168,49 @@ class LaundryStore {
 		const others = this.clientItemPrices.filter((p) => p.clientId !== clientId);
 		const newPrices: ClientItemPrice[] = prices.map((p) => ({ ...p, clientId }));
 		this.clientItemPrices = [...others, ...newPrices];
+	}
+
+	// ------------------------------------------------------------------
+	// 거래처 기간별 단가 규칙 CRUD
+	// ------------------------------------------------------------------
+
+	addClientItemPriceRule(
+		rule: Omit<ClientItemPriceRule, 'id' | 'createdAt'>
+	): ClientItemPriceRule {
+		const newRule: ClientItemPriceRule = {
+			...rule,
+			id: `price-rule-${generateId()}`,
+			createdAt: new Date().toISOString()
+		};
+		this.clientItemPriceRules = [...this.clientItemPriceRules, newRule];
+		return newRule;
+	}
+
+	updateClientItemPriceRule(
+		id: string,
+		updates: Partial<Omit<ClientItemPriceRule, 'id' | 'createdAt'>>
+	): void {
+		this.clientItemPriceRules = this.clientItemPriceRules.map((r) =>
+			r.id === id ? { ...r, ...updates } : r
+		);
+	}
+
+	removeClientItemPriceRule(id: string): void {
+		this.clientItemPriceRules = this.clientItemPriceRules.filter((r) => r.id !== id);
+	}
+
+	/** 거래처의 기간별 단가 규칙 목록 (최신순) */
+	getClientItemPriceRules(clientId: string): ClientItemPriceRule[] {
+		return this.clientItemPriceRules
+			.filter((r) => r.clientId === clientId)
+			.sort((a, b) => b.validFrom.localeCompare(a.validFrom));
+	}
+
+	/** 특정 날짜에 적용되는 기간별 단가 규칙 (validTo null = 무기한) */
+	getActiveRulesOnDate(clientId: string, date: string): ClientItemPriceRule[] {
+		return this.clientItemPriceRules.filter(
+			(r) => r.clientId === clientId && r.validFrom <= date && (!r.validTo || r.validTo >= date)
+		);
 	}
 
 	// ------------------------------------------------------------------
@@ -1408,34 +2261,48 @@ class LaundryStore {
 			return ts >= fromTs && ts <= toTs;
 		});
 
-		// 품목별 수량 집계
-		const lineMap = new SvelteMap<string, InvoiceLine>();
+		// 품목별 수량/금액 집계
+		// 각 출고 건마다 해당 날짜의 단가(기간별 규칙 우선)를 적용해 금액을 누적한다.
+		// 기간 내 단가가 변경된 경우에도 정확한 합산 금액이 계산된다.
+		const lineMap = new SvelteMap<
+			string,
+			{ category: Exclude<LaundryCategory, 'all'>; itemName: string; quantity: number; totalAmount: number }
+		>();
+
 		for (const shipment of shipments) {
+			const shipDate = shipment.shippedAt.split('T')[0]; // YYYY-MM-DD
 			for (const item of shipment.items) {
 				const key = `${item.category}__${item.itemName}`;
 				if (!lineMap.has(key)) {
-					const unitPrice = this.getUnitPrice(clientId, item.category, item.itemName);
 					lineMap.set(key, {
 						category: item.category,
 						itemName: item.itemName,
 						quantity: 0,
-						unitPrice,
-						amount: 0
+						totalAmount: 0
 					});
 				}
 				const line = lineMap.get(key)!;
-				line.quantity += item.quantity;
-				line.amount = line.quantity * line.unitPrice;
+				const unitPrice = this.getUnitPrice(clientId, item.category, item.itemName, shipDate);
+				line.quantity    += item.quantity;
+				line.totalAmount += item.quantity * unitPrice;
 			}
 		}
 
-		// 카테고리 → 품목명 순으로 정렬
+		// InvoiceLine 으로 변환 (단가 = 실효 평균가, 금액 = 합산 실금액)
 		const catOrder: Record<Exclude<LaundryCategory, 'all'>, number> = {
 			towel: 0,
 			sheet: 1,
 			uniform: 2
 		};
-		return [...lineMap.values()].sort((a, b) => {
+		const result: InvoiceLine[] = [...lineMap.values()].map((line) => ({
+			category:  line.category,
+			itemName:  line.itemName,
+			quantity:  line.quantity,
+			unitPrice: line.quantity > 0 ? Math.round(line.totalAmount / line.quantity) : 0,
+			amount:    line.totalAmount
+		}));
+
+		return result.sort((a, b) => {
 			const co = catOrder[a.category] - catOrder[b.category];
 			if (co !== 0) return co;
 			return a.itemName.localeCompare(b.itemName);

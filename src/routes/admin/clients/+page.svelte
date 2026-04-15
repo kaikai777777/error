@@ -45,7 +45,8 @@
     return iso.slice(0, 10);
   }
 
-  let showModal     = $state(false);
+  let showTypeDropdown = $state(false);
+  let showModal        = $state(false);
   let editingClient = $state<Client | null>(null);
   let formName         = $state('');
   let formType         = $state('hotel');
@@ -126,38 +127,63 @@
 </script>
 
 <div class="min-h-screen bg-slate-50 px-8 py-6">
-  <div class="flex items-center justify-between mb-5">
-    <h2 class="text-2xl font-extrabold text-slate-800">거래처 관리</h2>
-    <div class="flex items-center gap-3">
-      <div class="relative">
-        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="m21 21-4.35-4.35"/>
-        </svg>
-        <input type="text" placeholder="거래처명, 담당자, 사업자번호..." bind:value={searchQuery}
-          class="pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-sky-300 outline-none w-64 shadow-sm" />
-      </div>
-      <button onclick={openAdd}
-        class="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold shadow-sm transition-colors">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-          <path stroke-linecap="round" d="M12 4v16m8-8H4"/>
-        </svg>
-        거래처 등록
-      </button>
-    </div>
-  </div>
+  <h2 class="text-2xl font-extrabold text-slate-800 mb-5">거래처 관리</h2>
 
-  <div class="flex items-center gap-2 mb-5">
-    {#each typeFilters as f (f.value)}
-      <button onclick={() => typeFilter = f.value}
-        class="px-4 py-2 rounded-xl text-sm font-semibold border transition-colors {typeFilter === f.value ? 'bg-sky-100 text-sky-700 border-sky-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}">
-        {f.label}
-        {#if f.value !== 'all'}
-          <span class="ml-1 text-xs opacity-70">({store.clients.filter(c => c.type === f.value).length})</span>
-        {:else}
-          <span class="ml-1 text-xs opacity-70">({store.clients.length})</span>
-        {/if}
+  <div class="flex items-center gap-3 mb-5">
+    <!-- 타입 필터 드롭다운 (왼쪽) -->
+    <div class="relative">
+      <button 
+        onclick={() => showTypeDropdown = !showTypeDropdown}
+        class="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors whitespace-nowrap"
+      >
+        {typeFilters.find(f => f.value === typeFilter)?.label ?? '전체'}
+        <svg class="w-4 h-4 transition-transform {showTypeDropdown ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" d="m19 9-7 7-7-7"/>
+        </svg>
       </button>
-    {/each}
+      
+      {#if showTypeDropdown}
+        <div class="absolute top-full mt-2 left-0 bg-white border border-slate-200 rounded-xl shadow-lg z-10 min-w-max">
+          {#each typeFilters as f (f.value)}
+            <button
+              onclick={() => {
+                typeFilter = f.value;
+                showTypeDropdown = false;
+              }}
+              class="flex items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 w-full first:rounded-t-xl last:rounded-b-xl transition-colors {typeFilter === f.value ? 'bg-sky-50 text-sky-700 border-r-2 border-sky-600' : ''}"
+            >
+              {f.label}
+              {#if f.value !== 'all'}
+                <span class="text-xs text-slate-500">({store.clients.filter(c => c.type === f.value).length})</span>
+              {:else}
+                <span class="text-xs text-slate-500">({store.clients.length})</span>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </div>
+
+    <!-- 검색바 (드롭다운 오른쪽) -->
+    <div class="relative">
+      <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="m21 21-4.35-4.35"/>
+      </svg>
+      <input type="text" placeholder="거래처명, 담당자, 사업자번호..." bind:value={searchQuery}
+        class="pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-sky-300 outline-none w-64 shadow-sm" />
+    </div>
+
+    <!-- 여백 -->
+    <div class="flex-1"></div>
+
+    <!-- 거래처 등록 버튼 (오른쪽) -->
+    <button onclick={openAdd}
+      class="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold shadow-sm transition-colors whitespace-nowrap">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" d="M12 4v16m8-8H4"/>
+      </svg>
+      거래처 등록
+    </button>
   </div>
 
   <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">

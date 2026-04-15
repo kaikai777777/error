@@ -33,7 +33,7 @@ export type LaundryStatusCounts = Record<LaundryItemStatus, number>;
 export interface LaundryItem {
   id: string;
   clientId: string;
-  category: Exclude<LaundryCategory, 'all'>;
+  category: string;
   name: string;   // 고정 타입 대신 string으로 변경 (동적 추가 가능)
   counts: LaundryStatusCounts;
   updatedAt: string;
@@ -110,12 +110,25 @@ export interface ClientMemo {
 // 청구서 관련 타입
 // ============================================================
 
-// 거래처별 품목 단가 설정
+// 거래처별 품목 단가 설정 (기본 단가 - 상품관리에서 관리)
 export interface ClientItemPrice {
   clientId: string;
-  category: Exclude<LaundryCategory, 'all'>;
+  category: string;
   itemName: string;
   unitPrice: number;   // 원/개
+}
+
+// 거래처별 기간 단가 규칙 (청구 페이지에서 관리, 기본 단가 override)
+export interface ClientItemPriceRule {
+  id: string;
+  clientId: string;
+  category: string;
+  itemName: string;
+  unitPrice: number;   // 원/개
+  validFrom: string;   // YYYY-MM-DD
+  validTo?: string | null;  // YYYY-MM-DD, null = 이 날짜부터 쭉 (무기한)
+  memo?: string;
+  createdAt: string;
 }
 
 // 거래처 계약 정보
@@ -162,6 +175,7 @@ export interface StoreState {
   adminUsers: AdminUser[];
   clientMemos: ClientMemo[];
   clientItemPrices: ClientItemPrice[];
+  clientItemPriceRules: ClientItemPriceRule[];
   clientContracts: ClientContract[];
   invoices: Invoice[];
   selectedClientId: string | null;

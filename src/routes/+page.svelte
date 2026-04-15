@@ -69,7 +69,7 @@
         </span>
         <!-- 관리자 페이지 바로가기 (헤더 우측) -->
         <button
-          onclick={() => void goto('/admin')}
+          onclick={() => void goto('/admin/clients')}
           class="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 bg-white border border-slate-200 hover:border-slate-400 hover:bg-slate-50 px-3 py-1.5 rounded-full transition-all duration-200 font-medium"
         >
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -182,7 +182,7 @@
             : 'border-slate-700 bg-slate-800 shadow-md hover:shadow-xl'}"
         onmouseenter={() => adminHovered = true}
         onmouseleave={() => adminHovered = false}
-        onclick={() => void goto('/admin')}
+        onclick={() => void goto('/admin/clients')}
       >
         <div class="px-8 py-6 flex items-center gap-6">
           <!-- 아이콘 -->

@@ -4,11 +4,26 @@
 
   // ── 필터 ──────────────────────────────────────────────────────
   let roleFilter = $state<'all' | 'admin' | 'manager'>('all');
+  let showRoleDropdown = $state(false);
+  let searchQuery = $state('');
+
+  const roleFilters = [
+    { value: 'all',     label: '전체' },
+    { value: 'admin',   label: '관리자' },
+    { value: 'manager', label: '실무자' },
+  ];
 
   const filteredUsers = $derived(
-    store.adminUsers.filter((u) =>
-      roleFilter === 'all' ? true : u.role === roleFilter
-    )
+    store.adminUsers.filter((u) => {
+      const matchRole = roleFilter === 'all' ? true : u.role === roleFilter;
+      const q = searchQuery.trim().toLowerCase();
+      const matchSearch = !q
+        || u.name.toLowerCase().includes(q)
+        || u.username.toLowerCase().includes(q)
+        || (u.email ?? '').toLowerCase().includes(q)
+        || (u.phone ?? '').toLowerCase().includes(q);
+      return matchRole && matchSearch;
+    })
   );
 
   // ── 모달 상태 ──────────────────────────────────────────────────
@@ -119,13 +134,54 @@
 <div class="px-8 py-6 min-h-screen bg-slate-50">
 
   <!-- 상단 헤더 -->
-  <div class="flex items-start justify-between mb-6">
-    <div>
-      <h2 class="text-xl font-extrabold text-slate-800">사용자 관리</h2>
-      <p class="text-sm text-slate-500 mt-0.5">공장 실무자의 시스템 접근 계정을 관리합니다.</p>
+  <h2 class="text-2xl font-extrabold text-slate-800 mb-5">사용자 관리</h2>
+
+  <!-- 필터 & 검색 & 추가 버튼 -->
+  <div class="flex items-center gap-3 mb-5">
+    <!-- 역할 필터 드롭다운 (왼쪽) -->
+    <div class="relative">
+      <button 
+        onclick={() => showRoleDropdown = !showRoleDropdown}
+        class="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-colors whitespace-nowrap"
+      >
+        {roleFilters.find(f => f.value === roleFilter)?.label ?? '전체'}
+        <svg class="w-4 h-4 transition-transform {showRoleDropdown ? 'rotate-180' : ''}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" d="m19 9-7 7-7-7"/>
+        </svg>
+      </button>
+      
+      {#if showRoleDropdown}
+        <div class="absolute top-full mt-2 left-0 bg-white border border-slate-200 rounded-xl shadow-lg z-10 min-w-max">
+          {#each roleFilters as f (f.value)}
+            <button
+              onclick={() => {
+                roleFilter = f.value;
+                showRoleDropdown = false;
+              }}
+              class="flex items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 w-full first:rounded-t-xl last:rounded-b-xl transition-colors {roleFilter === f.value ? 'bg-sky-50 text-sky-700 border-r-2 border-sky-600' : ''}"
+            >
+              {f.label}
+            </button>
+          {/each}
+        </div>
+      {/if}
     </div>
+
+    <!-- 검색바 (중간) -->
+    <div class="relative">
+      <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="m21 21-4.35-4.35"/>
+      </svg>
+      <input type="text" placeholder="이름, 아이디, 이메일..." bind:value={searchQuery}
+        class="pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-sky-300 outline-none w-64 shadow-sm" />
+    </div>
+
+    <!-- 여백 -->
+    <div class="flex-1"></div>
+
+    <!-- 사용자 추가 버튼 (오른쪽) -->
     <button
-      class="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition-colors flex items-center gap-2"
+      class="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 whitespace-nowrap"
       onclick={openAddModal}
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
@@ -133,25 +189,6 @@
       </svg>
       사용자 추가
     </button>
-  </div>
-
-  <!-- 필터 -->
-  <div class="flex gap-2 mb-5">
-    {#each ([
-      { value: 'all',     label: '전체' },
-      { value: 'admin',   label: '관리자' },
-      { value: 'manager', label: '실무자' },
-    ] as const) as f (f.value)}
-      <button
-        class="px-4 py-1.5 rounded-xl text-sm font-bold border transition-colors
-          {roleFilter === f.value
-            ? 'bg-sky-600 text-white border-sky-600'
-            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}"
-        onclick={() => roleFilter = f.value}
-      >
-        {f.label}
-      </button>
-    {/each}
   </div>
 
   <!-- 테이블 카드 -->
