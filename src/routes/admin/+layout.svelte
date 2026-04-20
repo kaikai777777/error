@@ -9,9 +9,8 @@
 		{ emoji: '🏢', label: '거래처 관리', path: '/admin/clients', exact: false },
 		{ emoji: '👥', label: '사용자 관리', path: '/admin/users', exact: false },
 		{ emoji: '📦', label: '상품 관리', path: '/admin/products', exact: false },
-		{ emoji: '📋', label: '입출고 관리', path: '/admin/inout', exact: false },
 		{ emoji: '💬', label: '메모 확인', path: '/admin/memos', exact: false, badge: true },
-		{ emoji: '📈', label: '통계', path: '/admin/stats', exact: false },
+		{ emoji: '📊', label: '입출고 · 통계', path: '/admin/stats', exact: false },
 		{ emoji: '🧾', label: '청구서 관리', path: '/admin/billing', exact: false },
 	];
 

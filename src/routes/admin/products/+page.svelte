@@ -251,6 +251,7 @@
   }
 
   function commitPrice(itemName: string) {
+    if (editingItemId === null) return;
     if (!selectedClientId || !effectiveCat) return;
     const price = parseInt(editingPriceValue.replace(/[^0-9]/g, ''), 10) || 0;
     store.setClientItemPrice(selectedClientId, effectiveCat, itemName, price);
@@ -695,6 +696,8 @@
                     {#if editingItemId === item.id}
                       <input
                         type="text"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
                         bind:value={editingPriceValue}
                         onkeydown={(e) => handlePriceKeydown(e, item.name)}
                         onblur={() => commitPrice(item.name)}
