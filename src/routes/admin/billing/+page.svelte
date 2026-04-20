@@ -676,7 +676,7 @@
 							<thead>
 								<tr class="border-b border-slate-100 bg-slate-50">
 									<th class="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">품목명</th>
-									<th class="w-20 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">카테고리</th>
+									<th class="w-28 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400 whitespace-nowrap">카테고리</th>
 									<th class="w-20 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">수량</th>
 									<th class="w-28 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">단가</th>
 									<th class="w-28 px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">금액</th>
@@ -696,7 +696,7 @@
 										{#each catLines as line (line.category + line.itemName)}
 											<tr class="border-b border-slate-50 hover:bg-slate-50/70">
 												<td class="px-5 py-3 pl-8 font-medium text-slate-700">{line.itemName}</td>
-												<td class="w-20 px-4 py-3">
+												<td class="w-28 px-4 py-3">
 													<span class="rounded-full px-2 py-0.5 text-xs font-semibold {categoryBadge[line.category]}">
 														{CATEGORY_LABELS[line.category as 'towel'|'sheet'|'uniform']}
 													</span>
@@ -1442,7 +1442,7 @@
 					<thead>
 						<tr class="border-b border-slate-100 bg-slate-50">
 							<th class="px-4 py-2.5 text-left text-xs font-semibold text-slate-400">품목명</th>
-							<th class="w-20 px-4 py-2.5 text-left text-xs font-semibold text-slate-400">카테고리</th>
+							<th class="w-28 px-4 py-2.5 text-left text-xs font-semibold text-slate-400 whitespace-nowrap">카테고리</th>
 							<th class="w-16 px-4 py-2.5 text-right text-xs font-semibold text-slate-400">수량</th>
 							<th class="w-28 px-4 py-2.5 text-right text-xs font-semibold text-slate-400">단가</th>
 							<th class="w-28 px-4 py-2.5 text-right text-xs font-semibold text-slate-400">금액</th>
@@ -1452,7 +1452,7 @@
 						{#each inv.lines as line (line.category + line.itemName)}
 							<tr class="border-b border-slate-50 hover:bg-slate-50">
 								<td class="px-4 py-2.5 font-medium text-slate-700">{line.itemName}</td>
-								<td class="w-20 px-4 py-2.5">
+								<td class="w-28 px-4 py-2.5">
 									<span class="rounded-full px-2 py-0.5 text-xs font-semibold {categoryBadge[line.category]}">
 										{CATEGORY_LABELS[line.category]}
 									</span>
@@ -1487,44 +1487,42 @@
 	/* ── 인쇄 전용 전역 스타일 ── */
 	@media print {
 		/* 화면 UI 전체 숨기기 */
-		:global(#billing-screen-ui) { visibility: hidden !important; }
+		:global(#billing-screen-ui) { display: none !important; }
 
 		/* 기본: 두 인쇄 영역 모두 숨김 */
 		:global(#billing-invoice-print),
 		:global(#billing-statement-print) {
 			display: none !important;
-			visibility: hidden !important;
 		}
 
-		/* 청구서 인쇄 모드 */
-		:global(body.print-invoice #billing-screen-ui)    { display: none !important; }
+		/* 청구서 인쇄 모드: position:static 으로 다중 페이지 허용 */
+		:global(body.print-invoice #billing-screen-ui) { display: none !important; }
 		:global(body.print-invoice #billing-invoice-print) {
 			display: block !important;
-			visibility: visible !important;
-			position: fixed !important;
-			top: 0 !important; left: 0 !important;
+			position: static !important;
 			width: 100% !important;
 			background: white !important;
-			padding: 32px !important;
+			padding: 20px !important;
 			box-sizing: border-box !important;
-			z-index: 99999 !important;
+		}
+		/* 청구서 테이블 행이 페이지 중간에서 잘리지 않도록 */
+		:global(body.print-invoice #billing-invoice-print table tr) {
+			page-break-inside: avoid;
+			break-inside: avoid;
 		}
 
-		/* 거래내역서 인쇄 모드 */
+		/* 거래내역서 인쇄 모드: position:static 으로 다중 페이지 허용 */
 		:global(body.print-statement #billing-screen-ui)      { display: none !important; }
 		:global(body.print-statement #billing-statement-print) {
 			display: block !important;
-			visibility: visible !important;
-			position: fixed !important;
-			top: 0 !important; left: 0 !important;
+			position: static !important;
 			width: 100% !important;
 			background: white !important;
-			padding: 32px !important;
+			padding: 20px !important;
 			box-sizing: border-box !important;
-			z-index: 99999 !important;
 		}
 
-		@page { margin: 10mm; }
+		@page { margin: 12mm; }
 
 		:global(body.print-statement) {
 			size: A4 landscape;
