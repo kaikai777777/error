@@ -540,57 +540,6 @@
 		viewingInvoiceId ? store.invoices.find((i) => i.id === viewingInvoiceId) ?? null : null
 	);
 
-	// ── 이메일 발송 ──────────────────────────────────────────────────
-	type EmailDocType = 'invoice' | 'statement';
-	let showEmailModal  = $state(false);
-	let emailRecipient  = $state('');
-	let emailDocType    = $state<EmailDocType>('invoice');
-
-	function openEmailModal(type: EmailDocType) {
-		emailDocType = type;
-		if (!emailRecipient && selectedClient) {
-			emailRecipient =
-				selectedClient.email ??
-				selectedClient.managerEmail ??
-				'';
-		}
-		showEmailModal = true;
-	}
-
-	function sendEmail() {
-		if (!emailRecipient) return;
-		const clientName = selectedClient?.name ?? '';
-		const period     = `${periodFrom} ~ ${periodTo}`;
-
-		let subject = '';
-		let body    = '';
-
-		if (emailDocType === 'invoice') {
-			subject = `[청구서] ${clientName} ${period}`;
-			body    =
-				`안녕하세요.\n\n${period} 기간의 세탁 서비스 청구서를 첨부해 드립니다.\n\n` +
-				`거래처: ${clientName}\n` +
-				`청구 기간: ${period}\n` +
-				`총 수량: ${invoiceTotalQty.toLocaleString()}개\n` +
-				`청구 금액: ${invoiceTotal.toLocaleString()}원\n\n` +
-				`PDF 파일을 확인해 주시기 바랍니다.\n\n감사합니다.`;
-		} else {
-			const sd = statementData;
-			subject = `[거래내역서] ${clientName} ${period}`;
-			body    =
-				`안녕하세요.\n\n${period} 기간의 세탁 거래내역서를 첨부해 드립니다.\n\n` +
-				`거래처: ${clientName}\n` +
-				`거래 기간: ${period}\n` +
-				`총 출고 수량: ${(sd?.grandTotal ?? 0).toLocaleString()}개\n\n` +
-				`PDF 파일을 확인해 주시기 바랍니다.\n\n감사합니다.`;
-		}
-
-		const href =
-			`mailto:${encodeURIComponent(emailRecipient)}` +
-			`?subject=${encodeURIComponent(subject)}` +
-			`&body=${encodeURIComponent(body)}`;
-		window.open(href, '_blank');
-	}
 
 	// ── 헬퍼 ────────────────────────────────────────────────────────
 	const categoryBadge: Record<string, string> = {
@@ -871,11 +820,6 @@
 							청구서 엑셀 저장
 						</button>
 						<button type="button"
-							class="w-full rounded-xl border border-indigo-200 bg-indigo-50 py-3 text-sm font-bold text-indigo-700 hover:bg-indigo-100"
-							onclick={() => openEmailModal('invoice')}>
-							✉️ 청구서 이메일 발송
-						</button>
-						<button type="button"
 							class="w-full rounded-xl border border-slate-200 bg-white py-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
 							onclick={() => (showSaveConfirm = true)}>
 							💾 청구서 저장
@@ -989,11 +933,6 @@
 								<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
 								엑셀 저장
 							</button>
-							<button type="button"
-								class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100"
-								onclick={() => openEmailModal('statement')}>
-								✉️ 이메일 발송
-							</button>
 						</div>
 					{/if}
 				</div>
@@ -1095,8 +1034,8 @@
 												{@const col = statementData.columns[ci]}
 												{@const isLastInGroup = ci === statementData.columns.length - 1 || statementData.columns[ci + 1]?.category !== col.category}
 												{@const activeBg = col.category === 'towel' ? 'bg-sky-50 text-sky-800 font-semibold' : col.category === 'sheet' ? 'bg-indigo-50 text-indigo-800 font-semibold' : 'bg-amber-50 text-amber-800 font-semibold'}
-												<td class="px-2 py-2 text-center text-sm {qty > 0 ? activeBg : 'text-slate-200'} {isLastInGroup ? 'border-r border-slate-100' : ''}">
-													{qty > 0 ? qty.toLocaleString() : '—'}
+												<td class="px-2 py-2 text-center text-sm {qty > 0 ? activeBg : ''} {isLastInGroup ? 'border-r border-slate-100' : ''}">
+													{qty > 0 ? qty.toLocaleString() : ''}
 												</td>
 											{/each}
 											<td class="border-l border-slate-100 px-4 py-2 text-right font-bold text-slate-800">
@@ -1388,8 +1327,8 @@
 								{@const isLast = ci === sd.columns.length - 1 || sd.columns[ci + 1]?.category !== col.category}
 								{@const borderR = isLast ? (col.category === 'towel' ? '1px solid #bae6fd' : col.category === 'sheet' ? '1px solid #c7d2fe' : '1px solid #fde68a') : 'none'}
 								{@const activeColor = col.category === 'towel' ? '#0369a1' : col.category === 'sheet' ? '#4338ca' : '#92400e'}
-								<td style="padding:5px 4px; text-align:center; color:{qty > 0 ? activeColor : '#e2e8f0'}; font-weight:{qty > 0 ? '600' : '400'}; border-right:{borderR};">
-									{qty > 0 ? qty.toLocaleString() : '—'}
+								<td style="padding:5px 4px; text-align:center; color:{qty > 0 ? activeColor : 'transparent'}; font-weight:{qty > 0 ? '600' : '400'}; border-right:{borderR};">
+									{qty > 0 ? qty.toLocaleString() : ''}
 								</td>
 							{/each}
 							<td style="padding:5px 10px; text-align:right; font-weight:700; color:#1e293b;">{row.total.toLocaleString()}</td>
@@ -1476,9 +1415,6 @@
 						class="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-600 hover:bg-indigo-100"
 						onclick={printInvoice}>🖨️ 인쇄</button>
 					<button type="button"
-						class="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-600 hover:bg-emerald-100"
-						onclick={() => openEmailModal('invoice')}>✉️ 이메일</button>
-					<button type="button"
 						class="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-100"
 						onclick={() => { if (confirm('이 청구서를 삭제할까요?')) { store.removeInvoice(inv.id); viewingInvoiceId = null; } }}>🗑️ 삭제</button>
 					<button type="button"
@@ -1542,115 +1478,6 @@
 						<p class="mt-1 text-sm text-slate-600">{inv.memo}</p>
 					</div>
 				{/if}
-			</div>
-		</div>
-	</div>
-{/if}
-
-<!-- ═══════════════ 이메일 발송 모달 ═══════════════ -->
-{#if showEmailModal}
-	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm"
-		role="dialog" aria-modal="true"
-		onclick={(e) => { if (e.target === e.currentTarget) showEmailModal = false; }}>
-		<div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-			<div class="mb-5 flex items-center justify-between">
-				<h3 class="text-base font-extrabold text-slate-800">✉️ 이메일 발송</h3>
-				<button type="button" class="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100"
-					onclick={() => (showEmailModal = false)} aria-label="닫기">✕</button>
-			</div>
-
-			<div class="space-y-4">
-				<!-- 문서 종류 선택 -->
-				<div>
-					<p class="mb-2 text-xs font-bold text-slate-500">발송 문서</p>
-					<div class="flex gap-2">
-						<button type="button"
-							class="flex-1 rounded-xl border-2 py-2.5 text-sm font-bold transition-all {emailDocType === 'invoice'
-								? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-								: 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}"
-							onclick={() => (emailDocType = 'invoice')}>
-							📄 청구서
-						</button>
-						<button type="button"
-							class="flex-1 rounded-xl border-2 py-2.5 text-sm font-bold transition-all {emailDocType === 'statement'
-								? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-								: 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}"
-							onclick={() => (emailDocType = 'statement')}>
-							📋 거래내역서
-						</button>
-					</div>
-				</div>
-
-				<!-- 수신자 이메일 -->
-				<div>
-					<label for="email-recipient" class="mb-1 block text-xs font-bold text-slate-500">수신자 이메일</label>
-					<input
-						id="email-recipient"
-						type="email"
-						bind:value={emailRecipient}
-						placeholder="example@company.com"
-						class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-					/>
-					{#if selectedClient?.email || selectedClient?.managerEmail}
-						<div class="mt-1.5 flex flex-wrap gap-1">
-							{#if selectedClient?.email}
-								<button type="button"
-									class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs text-slate-600 hover:bg-slate-100"
-									onclick={() => (emailRecipient = selectedClient!.email!)}>
-									{selectedClient.email}
-								</button>
-							{/if}
-							{#if selectedClient?.managerEmail}
-								<button type="button"
-									class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-xs text-slate-600 hover:bg-slate-100"
-									onclick={() => (emailRecipient = selectedClient!.managerEmail!)}>
-									{selectedClient.managerEmail}
-								</button>
-							{/if}
-						</div>
-					{/if}
-				</div>
-
-				<!-- 미리보기 -->
-				<div class="rounded-xl border border-slate-100 bg-slate-50 p-4 space-y-1">
-					<p class="text-xs font-bold text-slate-400">발송 내용 미리보기</p>
-					<p class="text-xs text-slate-600">
-						<span class="font-semibold">제목:</span>
-						{emailDocType === 'invoice'
-							? `[청구서] ${selectedClient?.name ?? ''} ${periodFrom} ~ ${periodTo}`
-							: `[거래내역서] ${selectedClient?.name ?? ''} ${periodFrom} ~ ${periodTo}`}
-					</p>
-					<p class="text-xs text-slate-500 leading-relaxed">
-						{#if emailDocType === 'invoice'}
-							{periodFrom} ~ {periodTo} 기간의 청구서를 첨부해 드립니다.<br/>
-							청구 금액: {formatMoney(invoiceTotal)} / {invoiceTotalQty.toLocaleString()}개
-						{:else}
-							{periodFrom} ~ {periodTo} 기간의 거래내역서를 첨부해 드립니다.<br/>
-							총 출고 수량: {(statementData?.grandTotal ?? 0).toLocaleString()}개
-						{/if}
-					</p>
-				</div>
-
-				<!-- 안내 -->
-				<div class="rounded-xl border border-blue-100 bg-blue-50 p-3">
-					<p class="text-xs text-blue-700">
-						📎 <strong>PDF 첨부 방법:</strong> 「PDF 저장」 버튼으로 파일을 먼저 저장한 뒤,
-						메일 클라이언트가 열리면 저장한 PDF 파일을 직접 첨부해 주세요.
-					</p>
-				</div>
-			</div>
-
-			<div class="mt-6 flex justify-end gap-2 border-t border-slate-100 pt-4">
-				<button type="button"
-					class="rounded-xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-200"
-					onclick={() => (showEmailModal = false)}>취소</button>
-				<button type="button"
-					class="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-bold text-white hover:bg-indigo-600 disabled:opacity-50"
-					onclick={sendEmail}
-					disabled={!emailRecipient}>
-					✉️ 메일 클라이언트로 열기
-				</button>
 			</div>
 		</div>
 	</div>
