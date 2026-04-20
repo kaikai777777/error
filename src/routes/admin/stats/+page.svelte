@@ -325,7 +325,7 @@
 	<!-- ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═ -->
 	<!-- 출고 통계 ??                                                 -->
 	<!-- ?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═?�═ -->
-	{#key activeTab}
+
 	{#if activeTab === 'shipout'}
 
 		<!-- 기간 선택 카드 -->
@@ -748,7 +748,7 @@
 									</tr>
 								</thead>
 								<tbody>
-									{#each completedItemsForClient as item (item.name + item.category)}
+									{#each completedItemsForClient as item, idx (idx)}
 										<tr class="border-b border-slate-50 last:border-0 hover:bg-slate-50">
 											<td class="px-5 py-3 font-medium text-slate-700">{item.name}</td>
 											<td class="px-5 py-3">
@@ -768,7 +768,7 @@
 						</div>
 						<div class="space-y-2.5 p-5">
 							<p class="mb-4 text-xs font-semibold uppercase tracking-wide text-slate-400">품목별비교</p>
-							{#each completedItemsForClient as item (item.name + item.category)}
+							{#each completedItemsForClient as item, idx (idx)}
 								{@const ratio = item.completed / completedItemMax}
 								<div class="flex items-center gap-3">
 									<span class="w-20 shrink-0 truncate text-right text-xs font-medium text-slate-600" title={item.name}>{item.name}</span>
@@ -876,7 +876,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each completedTopItems as item, idx (item.name + item.category)}
+							{#each completedTopItems as item, idx (idx)}
 								<tr class="border-b border-slate-50 last:border-0 hover:bg-slate-50">
 									<td class="px-5 py-3 text-center">
 										{#if idx === 0}<span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-400 text-xs font-black text-white">1</span>
@@ -901,7 +901,7 @@
 		{/if}
 
 	{/if}<!-- /completed -->
-	{/key}
+
 
 
 </div>
