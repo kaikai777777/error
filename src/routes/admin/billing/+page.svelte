@@ -183,12 +183,43 @@
 	let invoiceMemo = $state('');
 
 	function printInvoice() {
-		document.body.classList.remove('print-statement');
-		document.body.classList.add('print-invoice');
-		window.addEventListener('afterprint', () => {
-			document.body.classList.remove('print-invoice');
-		}, { once: true });
-		window.print();
+		const el = document.getElementById('billing-invoice-print');
+		if (!el) return;
+		const content = el.innerHTML;
+
+		const win = window.open('', '_blank', 'width=900,height=700');
+		if (!win) {
+			// 팝업 차단 시 기존 방식으로 폴백
+			document.body.classList.remove('print-statement');
+			document.body.classList.add('print-invoice');
+			window.addEventListener('afterprint', () => {
+				document.body.classList.remove('print-invoice');
+			}, { once: true });
+			window.print();
+			return;
+		}
+
+		win.document.write(`<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>세탁 청구서</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; color: #1e293b; }
+    @page { margin: 15mm; size: A4; }
+    table { border-collapse: collapse; }
+    tr { page-break-inside: avoid; break-inside: avoid; }
+  </style>
+</head>
+<body>${content}</body>
+</html>`);
+		win.document.close();
+		win.focus();
+		setTimeout(() => {
+			win.print();
+			win.close();
+		}, 400);
 	}
 
 
@@ -1487,42 +1518,44 @@
 	/* ── 인쇄 전용 전역 스타일 ── */
 	@media print {
 		/* 화면 UI 전체 숨기기 */
-		:global(#billing-screen-ui) { display: none !important; }
+		:global(#billing-screen-ui) { visibility: hidden !important; }
 
 		/* 기본: 두 인쇄 영역 모두 숨김 */
 		:global(#billing-invoice-print),
 		:global(#billing-statement-print) {
 			display: none !important;
+			visibility: hidden !important;
 		}
 
-		/* 청구서 인쇄 모드: position:static 으로 다중 페이지 허용 */
-		:global(body.print-invoice #billing-screen-ui) { display: none !important; }
+		/* 청구서 인쇄 모드 (팝업 차단 시 폴백용) */
+		:global(body.print-invoice #billing-screen-ui)    { display: none !important; }
 		:global(body.print-invoice #billing-invoice-print) {
 			display: block !important;
-			position: static !important;
+			visibility: visible !important;
+			position: fixed !important;
+			top: 0 !important; left: 0 !important;
 			width: 100% !important;
 			background: white !important;
-			padding: 20px !important;
+			padding: 32px !important;
 			box-sizing: border-box !important;
-		}
-		/* 청구서 테이블 행이 페이지 중간에서 잘리지 않도록 */
-		:global(body.print-invoice #billing-invoice-print table tr) {
-			page-break-inside: avoid;
-			break-inside: avoid;
+			z-index: 99999 !important;
 		}
 
-		/* 거래내역서 인쇄 모드: position:static 으로 다중 페이지 허용 */
+		/* 거래내역서 인쇄 모드 */
 		:global(body.print-statement #billing-screen-ui)      { display: none !important; }
 		:global(body.print-statement #billing-statement-print) {
 			display: block !important;
-			position: static !important;
+			visibility: visible !important;
+			position: fixed !important;
+			top: 0 !important; left: 0 !important;
 			width: 100% !important;
 			background: white !important;
-			padding: 20px !important;
+			padding: 32px !important;
 			box-sizing: border-box !important;
+			z-index: 99999 !important;
 		}
 
-		@page { margin: 12mm; }
+		@page { margin: 10mm; }
 
 		:global(body.print-statement) {
 			size: A4 landscape;
